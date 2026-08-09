@@ -23,9 +23,7 @@ func parseVersion(s string) (semver, error) {
 	if s == "" {
 		return v, ErrInvalidVersion
 	}
-	if strings.HasPrefix(s, "v") {
-		s = s[1:]
-	}
+	s = strings.TrimPrefix(s, "v")
 	core := s
 	if i := strings.IndexByte(s, '+'); i >= 0 {
 		v.build = s[i+1:]
