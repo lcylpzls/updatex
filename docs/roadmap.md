@@ -22,8 +22,12 @@
 - Ed25519 清单签名校验（可选）；
 - 大小上限与 HTTPS 强制。
 
-## v0.4.0 — 可观测与安全打磨
+## v0.4.0 — 双实例示例与可观测
 
+- `examples/updateserver`：webx HTTP/3 服务端（自签证书、
+  `/update.json` + `/download`）；
+- `examples/updateclient`：httpx HTTP/3 客户端 + updatex
+  （临时目标文件 1.0.0 → 1.1.0 升级验证）；
 - Metrics 注入；日志事件补齐；
 - fuzz：清单解析、semver 解析；
 - 边界矩阵：版本比较、校验失败、下载中断、TOCTOU 重查。

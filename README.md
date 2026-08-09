@@ -46,6 +46,9 @@ updatex/
 │   ├── api.md             # API 定版（完整签名与语义）
 │   ├── research.md        # 领域调研与设计取舍
 │   └── roadmap.md         # 版本路线
+├── examples/
+│   ├── updateserver/      # webx HTTP/3 升级服务端
+│   └── updateclient/      # httpx HTTP/3 升级客户端
 └── README.md
 ```
 

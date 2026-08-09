@@ -175,10 +175,13 @@ type Metrics struct {
 require (
 	github.com/lcylpzls/errx v1.2.0
 	github.com/lcylpzls/logx v1.0.0
+	github.com/lcylpzls/httpx v1.0.0 // HTTP 客户端（支持 HTTP/3）
+	github.com/lcylpzls/webx v1.2.2 // 仅示例服务端
 )
 ```
 
-HTTP 客户端使用标准库 `net/http`（可选接入 httpx，见 roadmap）。
+HTTP 清单源默认使用 httpx 客户端（可切换 HTTP/1/2/3）；
+服务端示例使用 webx（HTTP/3 监听）。
 
 ## 13. 质量门禁
 
@@ -187,3 +190,14 @@ HTTP 客户端使用标准库 `net/http`（可选接入 httpx，见 roadmap）�
 - fuzz：清单解析、semver 解析；
 - 三平台 CI（替换路径按平台执行）+ govulncheck + Release；
 - 边界矩阵：版本比较边界、校验失败、下载中断、平台缺失、回滚。
+
+## 14. 双实例示例（HTTP/3 升级链路）
+
+`examples/updateserver` 与 `examples/updateclient` 组成最小升级闭环：
+
+- 服务端：webx + 自签 TLS 证书 + HTTP/3 监听，
+  提供 `/update.json`（清单）与 `/download`（二进制资产）；
+- 客户端：httpx（HTTP/3）拉取清单与资产 → updatex 校验替换
+  临时目标文件，验证版本从 1.0.0 升级到 1.1.0；
+- 两个实例均使用基座生态（webx/httpx/logx/errx），
+  体现“HTTP/3 承载自动升级”的完整链路。

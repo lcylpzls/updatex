@@ -97,8 +97,11 @@ func Bootstrap(ctx context.Context, executablePath string) error
 ## 4. source 子包
 
 ```go
-// HTTP 清单源（v0.1.0）
-func NewHTTPSource(url string, httpClient *http.Client, allowHTTP bool) *HTTPSource
+// HTTP 清单源（v0.1.0）：默认基于 httpx（支持 HTTP/1/2/3）
+func NewHTTPSource(url string, allowHTTP bool, opts ...HTTPSourceOption) (*HTTPSource, error)
+func WithHTTP3(enable bool) HTTPSourceOption   // 切换 HTTP/3 传输
+func WithHTTP2(enable bool) HTTPSourceOption   // 切换 HTTP/2 传输
+func WithHTTPClient(client *httpx.Client) HTTPSourceOption // 注入自定义 httpx 客户端
 
 // GitHub Releases 源（v0.3.0）
 func NewGitHubSource(repo string, opts ...GitHubOption) *GitHubSource

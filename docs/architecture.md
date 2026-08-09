@@ -160,4 +160,14 @@ type Config struct {
   管理员 API 触发 `ApplyAndRestart`；
 - jobx：用 `Every` 定时检查；
 - confx：`Config` 结构体可直接作为 confx 目标；
-- 自更新示例：`examples/selfupdate`（模拟本地 HTTP 源 + 临时目录）。
+- 自更新示例（v0.4.0）：
+  - `examples/updateserver`：webx HTTP/3 服务端（自签证书、
+    `/update.json` + `/download`）；
+  - `examples/updateclient`：httpx HTTP/3 客户端 + updatex，
+    将临时目标二进制从 1.0.0 升级到 1.1.0。
+
+### 8.1 HTTP/3 传输细节
+
+- 客户端 `HTTPSource` 默认使用 httpx（`WithHTTP3` 切换 HTTP/3）；
+- HTTP/3 需要 TLS 与 UDP；示例自签证书由服务端启动时生成；
+- 清单与资产走同一传输通道，体现端到端 HTTP/3 升级。
