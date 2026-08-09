@@ -15,7 +15,7 @@ import (
 )
 
 // stubReplace 注入替换函数并返回恢复函数。
-func stubReplace(t *testing.T, fn func(string, string) (bool, error)) {
+func stubReplace(t *testing.T, fn func(string, string, string) (bool, error)) {
 	t.Helper()
 	orig := replaceExec
 	replaceExec = fn
@@ -122,7 +122,7 @@ func TestApplyTempCreateFailure(t *testing.T) {
 
 // TestApplyMetricsAndLog 覆盖成功/失败指标与日志。
 func TestApplyMetricsAndLog(t *testing.T) {
-	stubReplace(t, func(_, _ string) (bool, error) { return false, nil })
+	stubReplace(t, func(_, _, _ string) (bool, error) { return false, nil })
 	var success, failure atomic.Int32
 	m := Metrics{
 		UpdateSuccess:  func(string) { success.Add(1) },
@@ -151,7 +151,7 @@ func TestApplyMetricsAndLog(t *testing.T) {
 
 // TestApplyAndRestartErrors 覆盖 Apply 失败与重启失败。
 func TestApplyAndRestartErrors(t *testing.T) {
-	stubReplace(t, func(_, _ string) (bool, error) { return true, nil })
+	stubReplace(t, func(_, _, _ string) (bool, error) { return true, nil })
 	srv, sha := assetServer(t, "new")
 	defer srv.Close()
 	u, _ := New(Config{Source: &stubSource{

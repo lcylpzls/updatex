@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -188,7 +189,7 @@ func (u *Updater) Apply(ctx context.Context) (*UpdateInfo, error) {
 		return nil, err
 	}
 	defer os.Remove(tmp)
-	restart, err := replaceExec(u.executablePath, tmp)
+	restart, err := replaceExec(u.executablePath, tmp, m.Version)
 	if err != nil {
 		u.metricUpdateFailure(err)
 		u.logError("apply-replace", err)
@@ -235,7 +236,7 @@ func (u *Updater) downloadAndVerify(ctx context.Context, asset Asset) (path stri
 		return "", errx.New(errx.KindUnavailable, CodeDownloadFailed,
 			fmt.Sprintf("资产端点返回非 200：%d", resp.StatusCode))
 	}
-	tmp, err := createTempFile("", "updatex-*")
+	tmp, err := createTempFile(filepath.Dir(u.executablePath), "updatex-*")
 	if err != nil {
 		return "", errx.Wrap(err, errx.KindUnavailable, CodeDownloadFailed, "临时文件创建失败")
 	}
