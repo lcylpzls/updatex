@@ -2,6 +2,7 @@ package updatex
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"io"
 	"os"
@@ -65,6 +66,8 @@ type Config struct {
 	Metrics Metrics
 	// HTTPClient 资产下载客户端（可选，默认 httpx 30s 超时）。
 	HTTPClient *httpx.Client
+	// VerifyPublicKey Ed25519 公钥（可选；配置后强制校验清单签名）。
+	VerifyPublicKey []byte
 }
 
 // UpdateInfo 检查结果。
@@ -104,6 +107,9 @@ func New(cfg Config) (*Updater, error) {
 	if cfg.MaxDownloadBytes < 0 {
 		return nil, errInvalidConfig("下载大小上限不能为负")
 	}
+	if len(cfg.VerifyPublicKey) > 0 && len(cfg.VerifyPublicKey) != ed25519.PublicKeySize {
+		return nil, errInvalidConfig("Ed25519 公钥长度非法")
+	}
 	execPath := cfg.ExecutablePath
 	if execPath == "" {
 		execPath, err = executablePathFn()
@@ -140,6 +146,11 @@ func (u *Updater) Check(ctx context.Context) (*UpdateInfo, error) {
 		u.metricCheckFailure(err)
 		return nil, err
 	}
+	if err := u.verifyManifest(m); err != nil {
+		u.metricCheckFailure(err)
+		u.logError("check-signature", err)
+		return nil, err
+	}
 	asset, err := m.AssetFor(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		u.metricCheckFailure(err)
@@ -164,6 +175,11 @@ func (u *Updater) Apply(ctx context.Context) (*UpdateInfo, error) {
 	latest, err := parseVersion(m.Version)
 	if err != nil {
 		u.metricUpdateFailure(err)
+		return nil, err
+	}
+	if err := u.verifyManifest(m); err != nil {
+		u.metricUpdateFailure(err)
+		u.logError("apply-signature", err)
 		return nil, err
 	}
 	if compareVersion(latest, u.current) <= 0 {
@@ -204,6 +220,17 @@ func (u *Updater) Apply(ctx context.Context) (*UpdateInfo, error) {
 		Asset:           asset,
 		RestartRequired: restart,
 	}, nil
+}
+
+// verifyManifest 配置公钥时校验清单签名；未配置公钥则跳过。
+func (u *Updater) verifyManifest(m *Manifest) error {
+	if len(u.cfg.VerifyPublicKey) == 0 {
+		return nil
+	}
+	if m.Signature == "" {
+		return ErrSignatureInvalid
+	}
+	return m.VerifySignature(u.cfg.VerifyPublicKey)
 }
 
 // ApplyAndRestart 执行更新并在需要时调用 restart（由业务决定退出方式）。

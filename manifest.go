@@ -1,11 +1,16 @@
 package updatex
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"time"
 
 	"github.com/lcylpzls/errx"
 )
+
+// manifestMarshal 可替换的 JSON 序列化（测试注入用）。
+var manifestMarshal = json.Marshal
 
 // Asset 单平台更新资产。
 type Asset struct {
@@ -27,10 +32,8 @@ type Manifest struct {
 	Notes string `json:"notes"`
 	// Platforms 平台资产（键为 GOOS_GOARCH）。
 	Platforms map[string]Asset `json:"platforms"`
-	// Signature 清单签名（Ed25519，可选）。
-	Signature string `json:"signature,omitempty"`
-
-	raw []byte
+	// Signature 清单签名（Ed25519，可选；空值参与规范签名载荷）。
+	Signature string `json:"signature"`
 }
 
 // ParseManifest 解析清单并保留原文字节（签名校验用）。
@@ -56,8 +59,38 @@ func ParseManifest(data []byte) (*Manifest, error) {
 			return nil, err
 		}
 	}
-	m.raw = append([]byte(nil), data...)
 	return &m, nil
+}
+
+// VerifySignature 校验清单 Ed25519 签名。
+// 签名载荷为签名置空后的规范化 JSON（字段顺序与 map 排序由
+// encoding/json 保证，发布时间按原始表示序列化）。
+func (m *Manifest) VerifySignature(publicKey []byte) error {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return errx.New(errx.KindInvalid, CodeSignatureInvalid, "Ed25519 公钥长度非法")
+	}
+	if m.Signature == "" {
+		return ErrSignatureInvalid
+	}
+	sig, err := base64.StdEncoding.DecodeString(m.Signature)
+	if err != nil || len(sig) != ed25519.SignatureSize {
+		return ErrSignatureInvalid
+	}
+	payload, err := m.signedPayload()
+	if err != nil {
+		return errx.Wrap(err, errx.KindInvalid, CodeSignatureInvalid, "签名载荷序列化失败")
+	}
+	if !ed25519.Verify(publicKey, payload, sig) {
+		return ErrSignatureInvalid
+	}
+	return nil
+}
+
+// signedPayload 返回签名载荷：签名置空后的规范化 JSON。
+func (m *Manifest) signedPayload() ([]byte, error) {
+	cp := *m
+	cp.Signature = ""
+	return manifestMarshal(&cp)
 }
 
 // AssetFor 返回指定平台的资产；不存在返回 ErrPlatformUnsupported。

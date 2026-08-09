@@ -2,15 +2,28 @@ package updatex
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"testing"
 
 	"github.com/lcylpzls/logx"
 )
+
+// signManifest 使用私钥对清单签名（测试辅助）。
+func signManifest(t *testing.T, m *Manifest, priv ed25519.PrivateKey) {
+	t.Helper()
+	payload, err := m.signedPayload()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Signature = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, payload))
+}
 
 // testLogger 构造写入丢弃目标的日志器。
 func testLogger() logx.Logger {

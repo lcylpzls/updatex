@@ -2,6 +2,8 @@ package updatex
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"os"
 	"runtime"
@@ -22,6 +24,9 @@ func TestNewErrors(t *testing.T) {
 	}
 	if _, err := New(Config{Source: &stubSource{}, CurrentVersion: "1.0.0", MaxDownloadBytes: -1}); !errx.Is(err, CodeInvalidConfig) {
 		t.Fatalf("负上限应报错，实际：%v", err)
+	}
+	if _, err := New(Config{Source: &stubSource{}, CurrentVersion: "1.0.0", VerifyPublicKey: []byte("short")}); !errx.Is(err, CodeInvalidConfig) {
+		t.Fatalf("公钥长度非法应报错，实际：%v", err)
 	}
 	// 默认可执行文件路径解析失败。
 	orig := executablePathFn
@@ -85,6 +90,40 @@ func TestCheck(t *testing.T) {
 	u5, _ := New(Config{Source: srcBad, CurrentVersion: "1.0.0", ExecutablePath: "x"})
 	if _, err := u5.Check(ctx); !errx.Is(err, CodeInvalidVersion) {
 		t.Fatalf("坏版本应报错，实际：%v", err)
+	}
+}
+
+// TestCheckSignature 覆盖清单签名校验分支。
+func TestCheckSignature(t *testing.T) {
+	ctx := context.Background()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := newStubManifest("1.1.0", "https://x/download", strings.Repeat("ab", 32))
+	signManifest(t, base, priv)
+	u, err := New(Config{Source: &stubSource{manifest: base},
+		CurrentVersion: "1.0.0", ExecutablePath: "x", VerifyPublicKey: pub})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.Check(ctx); err != nil {
+		t.Fatalf("合法签名应通过检查：%v", err)
+	}
+	// 篡改清单。
+	tampered := *base
+	tampered.Notes = "被篡改"
+	u2, _ := New(Config{Source: &stubSource{manifest: &tampered},
+		CurrentVersion: "1.0.0", ExecutablePath: "x", VerifyPublicKey: pub})
+	if _, err := u2.Check(ctx); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("篡改清单应校验失败，实际：%v", err)
+	}
+	// 配置公钥但清单无签名。
+	noSig := newStubManifest("1.1.0", "https://x/download", strings.Repeat("ab", 32))
+	u3, _ := New(Config{Source: &stubSource{manifest: noSig},
+		CurrentVersion: "1.0.0", ExecutablePath: "x", VerifyPublicKey: pub})
+	if _, err := u3.Check(ctx); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("缺签名应校验失败，实际：%v", err)
 	}
 }
 

@@ -1,5 +1,17 @@
 # 更新日志
 
+## [v0.3.0] - 2026-08-09
+
+### 新增
+
+- GitHub Releases 源：`NewGitHubSource` + 令牌/客户端注入，
+  资产命名约定 `<名称>_<GOOS>_<GOARCH>`，配套 `.sha256` 校验和
+  文件自动拉取解析；
+- Ed25519 清单签名：`Config.VerifyPublicKey` 注入公钥后强制
+  校验，`Manifest.VerifySignature` 公开 API，签名载荷为
+  `Signature` 置空后的规范化 JSON；
+- `FuzzVerifySignature` 模糊目标并接入 CI。
+
 ## [v0.2.0] - 2026-08-09
 
 ### 新增

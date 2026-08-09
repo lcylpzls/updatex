@@ -70,6 +70,7 @@ jobs:
           go test -run '^$' -fuzz '^FuzzParseVersion$' -fuzztime=10s .
           go test -run '^$' -fuzz '^FuzzManifest$' -fuzztime=10s .
           go test -run '^$' -fuzz '^FuzzVerifySHA256$' -fuzztime=10s .
+          go test -run '^$' -fuzz '^FuzzVerifySignature$' -fuzztime=10s .
 
   vulncheck:
     runs-on: ubuntu-latest

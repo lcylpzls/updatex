@@ -58,7 +58,8 @@ updatex 是 **Go 程序的自动升级组件**：程序集成后具备
 - `version` 为语义化版本（`主.次.补丁`，可选 `-预发布` 与 `+构建`）；
 - `platforms` 键为 `GOOS_GOARCH`（如 `linux_amd64`、`windows_arm64`）；
 - `sha256` 必填；`signature` 可选（配置公钥时必填）；
-- 清单 JSON 的**规范化字节**参与签名（不重新序列化，直接签原文）。
+- 清单 JSON 的**规范化字节**参与签名（`Signature` 置空后序列化，
+  字段顺序与 map 排序由 `encoding/json` 保证，可复现可验证）。
 
 ## 5. 数据流
 

@@ -2,6 +2,8 @@ package updatex
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -100,6 +102,34 @@ func TestApplyDownloadNon200(t *testing.T) {
 		CurrentVersion: "1.0.0", ExecutablePath: "x", AllowHTTP: true})
 	if _, err := u.Apply(context.Background()); !errx.Is(err, CodeDownloadFailed) {
 		t.Fatalf("非 200 应报下载失败，实际：%v", err)
+	}
+}
+
+// TestApplySignature 覆盖 Apply 签名校验分支。
+func TestApplySignature(t *testing.T) {
+	stubReplace(t, func(_, _, _ string) (bool, error) { return false, nil })
+	srv, sha := assetServer(t, "new")
+	defer srv.Close()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newStubManifest("1.1.0", srv.URL+"/download", sha)
+	signManifest(t, m, priv)
+	u, err := New(Config{Source: &stubSource{manifest: m},
+		CurrentVersion: "1.0.0", ExecutablePath: "x", AllowHTTP: true, VerifyPublicKey: pub})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.Apply(context.Background()); err != nil {
+		t.Fatalf("合法签名应通过应用：%v", err)
+	}
+	tampered := *m
+	tampered.Notes = "被篡改"
+	u2, _ := New(Config{Source: &stubSource{manifest: &tampered},
+		CurrentVersion: "1.0.0", ExecutablePath: "x", AllowHTTP: true, VerifyPublicKey: pub})
+	if _, err := u2.Apply(context.Background()); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("篡改清单应校验失败，实际：%v", err)
 	}
 }
 

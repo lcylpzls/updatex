@@ -1,6 +1,8 @@
 package updatex
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
@@ -58,5 +60,22 @@ func FuzzVerifySHA256(f *testing.F) {
 	f.Add([]byte("data"), "bad", int64(-1))
 	f.Fuzz(func(t *testing.T, data []byte, sha string, limit int64) {
 		_, _ = verifySHA256(strings.NewReader(string(data)), sha, limit)
+	})
+}
+
+// FuzzVerifySignature 模糊测试签名校验：任意输入不得 panic。
+func FuzzVerifySignature(f *testing.F) {
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add([]byte(`{"version":"1.0.0","platforms":{"x_y":{"url":"https://x/a","sha256":"`+strings.Repeat("ab", 32)+`"}}}`), []byte(pub), []byte("c2ln"))
+	f.Add([]byte(nil), []byte(nil), []byte(nil))
+	f.Fuzz(func(t *testing.T, data, key, sig []byte) {
+		m, err := ParseManifest(data)
+		if err == nil {
+			m.Signature = string(sig)
+			_ = m.VerifySignature(key)
+		}
 	})
 }

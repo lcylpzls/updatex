@@ -3,8 +3,8 @@
 自研程序自动升级库：集成后程序具备版本检查、下载校验、原子替换
 与重启能力，与 errx / logx / confx / httpx 生态打通。
 
-> 当前状态：**v0.2.0（Windows 延迟替换与回滚）已发布**。GitHub
-> Releases 源、Ed25519 签名与 HTTP/3 双实例示例按路线图持续推进。
+> 当前状态：**v0.3.0（GitHub 源与签名）已发布**。HTTP/3 双实例
+> 示例与发布前终审按路线图持续推进。
 
 ## 定位
 
@@ -64,6 +64,7 @@ u, err := updatex.New(updatex.Config{
 - v0.1.0：核心闭环（检查 / 下载校验 / Unix 原子替换 / HTTP 清单源）。
 - v0.2.0：Windows 启动时替换（.new/.pending/Bootstrap）与
   Unix 备份回滚。
+- v0.3.0：GitHub Releases 源与 Ed25519 清单签名校验。
 
 详细版本规划见 [docs/roadmap.md](docs/roadmap.md)，更新记录见
 [CHANGELOG.md](CHANGELOG.md)。

@@ -1,6 +1,6 @@
 # updatex API 定版
 
-> 版本：v0.2.0（已发布） · 已实现签名与代码一致；
+> 版本：v0.3.0（已发布） · 已实现签名与代码一致；
 > 标注 **[规划中]** 的公开面按路线图在后续版本落地，
 > v0.1.0 起冻结已实现的核心公开面。
 
@@ -20,7 +20,7 @@ type Config struct {
 	Source           VersionSource
 	CurrentVersion   string
 	ExecutablePath   string
-	VerifyPublicKey  []byte  // [规划中 v0.3.0] Ed25519 签名校验
+	VerifyPublicKey  []byte
 	MaxDownloadBytes int64
 	AllowHTTP        bool
 	Logger           logx.Logger
@@ -68,12 +68,11 @@ type Manifest struct {
 	Notes       string
 	Platforms   map[string]Asset
 	Signature   string
-	raw         []byte // 签名原文
 }
 
 func ParseManifest(data []byte) (*Manifest, error)
 func (m *Manifest) AssetFor(goos, goarch string) (Asset, error)
-func (m *Manifest) VerifySignature(publicKey []byte) error // [规划中 v0.3.0]
+func (m *Manifest) VerifySignature(publicKey []byte) error
 ```
 
 ## 3. 根包函数
@@ -105,11 +104,22 @@ func WithHTTP3(enable bool) HTTPSourceOption   // 切换 HTTP/3 传输
 func WithHTTP2(enable bool) HTTPSourceOption   // 切换 HTTP/2 传输
 func WithHTTPClient(client httpClient) HTTPSourceOption    // 注入自定义客户端（*httpx.Client 可直接传入）
 
-// GitHub Releases 源（[规划中 v0.3.0]）
-func NewGitHubSource(repo string, opts ...GitHubOption) *GitHubSource
+// GitHub Releases 源
+func NewGitHubSource(repo string, opts ...GitHubOption) (*GitHubSource, error)
 func WithGitHubToken(token string) GitHubOption
-func WithGitHubClient(client *http.Client) GitHubOption
+func WithGitHubClient(client httpClient) GitHubOption
 ```
+
+GitHub 资产命名约定：`<名称>_<GOOS>_<GOARCH>[.扩展名]`；
+校验和文件约定：`<资产名>.sha256` 或 `<去扩展名>.sha256`
+（内容为 64 位十六进制，可带文件名后缀）。
+
+### 5.1 签名语义
+
+- 签名载荷为 `Signature` 置空后的规范化 JSON（字段顺序与
+  map 排序由 `encoding/json` 保证）；
+- 配置公钥但清单无签名 → `ErrSignatureInvalid`；
+- 未配置公钥 → 跳过签名校验（文档明确降级风险）。
 
 ## 5. 错误值清单
 

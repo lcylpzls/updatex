@@ -9,13 +9,13 @@ updatex/
 ├── updatex.go          # 根包：Check/Apply/Bootstrap/Config/错误
 ├── version.go          # 轻量 semver 解析与比较
 ├── manifest.go         # 清单结构、解析与平台选择
-├── verify.go           # SHA256 流式校验 + Ed25519 签名
+├── verify.go           # SHA256 流式校验
 ├── replace_unix.go     # Unix 原子替换（build tag）
 ├── replace_windows.go  # Windows 启动时替换（build tag）
 ├── source/
 │   ├── source.go       # VersionSource 接口
-│   ├── http.go         # HTTP 清单源
-│   └── github.go       # GitHub Releases 源（v0.3.0）
+│   ├── http_impl.go    # HTTP 清单源（httpx 客户端）
+  │   └── github.go       # GitHub Releases 源（v0.3.0 已落地）
 └── updatex_test.go     # 根包测试（注入 httptest 源）
 ```
 
@@ -110,8 +110,8 @@ Bootstrap（新进程，main 最前调用）
 ### 5.2 真实性（可选签名）
 
 - Ed25519 公钥经配置注入；
-- 签名对象为清单 JSON **原文字节**（非重新序列化），
-  保证字节级一致性；
+- 签名对象为清单 JSON **规范化字节**（`Signature` 置空后序列化，
+  字段顺序与 map 排序由 `encoding/json` 保证）；
 - 配置公钥但清单无签名 → `ErrSignatureInvalid`；
 - 未配置公钥 → 跳过签名校验（文档明确降级风险）。
 

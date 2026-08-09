@@ -1,6 +1,9 @@
 package updatex
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -18,7 +21,7 @@ func TestParseManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.Version != "1.1.0" || m.Notes != "升级" || m.Signature != "sig" ||
-		m.PublishedAt.IsZero() || len(m.raw) == 0 {
+		m.PublishedAt.IsZero() {
 		t.Fatalf("清单解析不符：%+v", m)
 	}
 	asset, err := m.AssetFor("linux", "amd64")
@@ -44,6 +47,67 @@ func TestParseManifest(t *testing.T) {
 			!errx.Is(err, CodeInvalidVersion) {
 			t.Fatalf("%s 应报错，实际：%v", name, err)
 		}
+	}
+}
+
+// TestVerifySignature 覆盖 Ed25519 签名校验分支。
+func TestVerifySignature(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manifest{Version: "1.1.0", Notes: "说明",
+		Platforms: map[string]Asset{"x_y": {URL: "https://x", SHA256: strings.Repeat("ab", 32)}}}
+	signManifest(t, m, priv)
+	if err := m.VerifySignature(pub); err != nil {
+		t.Fatalf("合法签名应通过：%v", err)
+	}
+
+	// 篡改清单。
+	tampered := *m
+	tampered.Notes = "被篡改"
+	if err := tampered.VerifySignature(pub); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("篡改清单应校验失败，实际：%v", err)
+	}
+
+	// 签名缺失。
+	noSig := &Manifest{Version: "1.1.0",
+		Platforms: map[string]Asset{"x_y": {URL: "https://x", SHA256: strings.Repeat("ab", 32)}}}
+	if err := noSig.VerifySignature(pub); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("缺签名应校验失败，实际：%v", err)
+	}
+
+	// 签名非 base64。
+	badSig := *m
+	badSig.Signature = "!!!"
+	if err := badSig.VerifySignature(pub); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("坏签名应校验失败，实际：%v", err)
+	}
+
+	// 错误公钥。
+	otherPub, _, _ := ed25519.GenerateKey(rand.Reader)
+	if err := m.VerifySignature(otherPub); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("错误公钥应校验失败，实际：%v", err)
+	}
+
+	// 公钥长度非法。
+	if err := m.VerifySignature([]byte("short")); !errx.Is(err, CodeSignatureInvalid) {
+		t.Fatalf("公钥长度非法应报错，实际：%v", err)
+	}
+
+	// 签名长度非法。
+	shortSig := *m
+	shortSig.Signature = base64.StdEncoding.EncodeToString([]byte("short"))
+	if err := shortSig.VerifySignature(pub); !errors.Is(err, ErrSignatureInvalid) {
+		t.Fatalf("短签名应校验失败，实际：%v", err)
+	}
+
+	// 签名载荷序列化失败。
+	origMarshal := manifestMarshal
+	manifestMarshal = func(any) ([]byte, error) { return nil, errors.New("序列化失败") }
+	defer func() { manifestMarshal = origMarshal }()
+	if err := m.VerifySignature(pub); !errx.Is(err, CodeSignatureInvalid) {
+		t.Fatalf("载荷序列化失败应报错，实际：%v", err)
 	}
 }
 

@@ -19,9 +19,13 @@ var goodManifest = `{"version":"1.1.0","platforms":{"linux_amd64":` +
 type stubHTTPClient struct {
 	resp *http.Response
 	err  error
+	fn   func(context.Context, string, ...httpx.RequestOption) (*http.Response, error)
 }
 
-func (c *stubHTTPClient) Get(context.Context, string, ...httpx.RequestOption) (*http.Response, error) {
+func (c *stubHTTPClient) Get(ctx context.Context, url string, opts ...httpx.RequestOption) (*http.Response, error) {
+	if c.fn != nil {
+		return c.fn(ctx, url, opts...)
+	}
 	return c.resp, c.err
 }
 
