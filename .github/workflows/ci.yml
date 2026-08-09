@@ -70,7 +70,7 @@ jobs:
           - distro: fedora:41
             prepare: dnf -y install git ca-certificates curl tar
           - distro: rockylinux:9
-            prepare: dnf -y install --setopt=install_weak_deps=False git ca-certificates curl tar
+            prepare: dnf -y install --setopt=install_weak_deps=False git
           - distro: archlinux:latest
             prepare: pacman -Syu --noconfirm git ca-certificates curl tar
           - distro: alpine:3.20
