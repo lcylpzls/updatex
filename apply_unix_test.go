@@ -4,10 +4,11 @@ package updatex
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lcylpzls/errx"
 )
 
 // TestApplySuccess 覆盖 Unix 真实原子替换。
@@ -47,7 +48,7 @@ func TestApplyReplaceFailure(t *testing.T) {
 		CurrentVersion: "1.0.0",
 		ExecutablePath: filepath.Join(t.TempDir(), "missing", "app"),
 		AllowHTTP:      true})
-	if _, err := u.Apply(context.Background()); !errors.Is(err, ErrReplaceFailed) {
+	if _, err := u.Apply(context.Background()); !errx.Is(err, CodeReplaceFailed) {
 		t.Fatalf("替换失败应报错，实际：%v", err)
 	}
 }
