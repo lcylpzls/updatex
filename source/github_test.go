@@ -121,7 +121,7 @@ func TestGitHubLatest(t *testing.T) {
 
 	// 无当前平台资产。
 	srvNo := githubFixture(t, "", shaName, func(string) string {
-		return `{"tag_name":"v1.1.0","assets":[{"name":"other_linux_amd64.zip","state":"uploaded"}]}`
+		return `{"tag_name":"v1.1.0","assets":[{"name":"app_solaris_sparc.zip","state":"uploaded"}]}`
 	})
 	defer srvNo.Close()
 	sNo, _ := NewGitHubSource("o/r", withAPIBase(srvNo.URL))
@@ -131,7 +131,8 @@ func TestGitHubLatest(t *testing.T) {
 
 	// 资产未上传。
 	srvDraft := githubFixture(t, "", shaName, func(string) string {
-		return `{"tag_name":"v1.1.0","assets":[{"name":"app_linux_amd64.zip","state":"draft"}]}`
+		return fmt.Sprintf(`{"tag_name":"v1.1.0","assets":[{"name":%q,"state":"draft"}]}`,
+			"app_"+runtime.GOOS+"_"+runtime.GOARCH+".zip")
 	})
 	defer srvDraft.Close()
 	sDraft, _ := NewGitHubSource("o/r", withAPIBase(srvDraft.URL))
