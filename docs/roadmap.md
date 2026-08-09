@@ -41,6 +41,9 @@
 - fuzz：清单解析、semver 解析；
 - 边界矩阵：版本比较、校验失败、下载中断、TOCTOU 重查。
 
+> 状态：**已发布**（v0.4.0，2026-08-10）。双实例端到端测试断言
+> `HTTP/3.0` 协议；依赖 httpx v1.0.2（含超时生命周期修复）。
+
 ## v0.5.0 — 发布前终审
 
 - README / ERRORS.md / LICENSE / 示例（自更新演示）定稿；
@@ -58,5 +61,6 @@ go test -run '^$' -fuzz '^FuzzManifest$' -fuzztime=10s .
 govulncheck ./...
 ```
 
-CI：ubuntu/windows/macos 三平台 + fuzz job + govulncheck job +
-Release（tag 触发）。
+CI：ubuntu/windows/macos 三平台 + Linux 多发行版容器矩阵
+（debian / fedora / opensuse / archlinux / alpine，验证 glibc 与
+musl 生态）+ fuzz job + govulncheck job + Release（tag 触发）。

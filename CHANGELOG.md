@@ -1,5 +1,24 @@
 # 更新日志
 
+## [v0.4.0] - 2026-08-10
+
+### 新增
+
+- 双实例 HTTP/3 示例（独立嵌套模块 `examples/`，不污染库依赖）：
+  - `examples/updateserver`：基于 webx 的 HTTP/3 升级服务端，
+    提供 `/update.json` 清单与 `/download` 资产；
+  - `examples/updateclient`：基于 httpx HTTP/3 客户端 + updatex，
+    端到端演示 1.0.0 → 1.1.0 升级（含 Windows 延迟替换闭环）；
+- 端到端测试断言真实协商 `HTTP/3.0` 协议；
+- 依赖升级：httpx v1.0.2（修复客户端超时取消 H2/H3 响应体）。
+- CI/Release 增加 Linux 多发行版容器矩阵（debian / fedora /
+  opensuse / archlinux / alpine，纯 Go 构建链路 CGO_ENABLED=0）。
+
+### 说明
+
+- 示例测试已接入三平台 CI 与 Release 质量门禁；
+- HTTP/3 升级要求 httpx ≥ v1.0.2。
+
 ## [v0.3.0] - 2026-08-09
 
 ### 新增
