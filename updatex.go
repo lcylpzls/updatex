@@ -68,6 +68,8 @@ type Config struct {
 	HTTPClient *httpx.Client
 	// VerifyPublicKey Ed25519 公钥（可选；配置后强制校验清单签名）。
 	VerifyPublicKey []byte
+	// TraceHook 链路追踪钩子（可选）。
+	TraceHook TraceHook
 }
 
 // UpdateInfo 检查结果。
@@ -133,7 +135,10 @@ func New(cfg Config) (*Updater, error) {
 }
 
 // Check 检查是否有可用更新（仅拉取与比较，不下载）。
-func (u *Updater) Check(ctx context.Context) (*UpdateInfo, error) {
+func (u *Updater) Check(ctx context.Context) (info *UpdateInfo, err error) {
+	ctx, end := u.startTrace(ctx, "updatex.check",
+		TraceAttr{Key: "updatex.current_version", Value: u.cfg.CurrentVersion})
+	defer func() { end(err) }()
 	u.metricCheck()
 	m, err := u.cfg.Source.Latest(ctx)
 	if err != nil {
@@ -156,7 +161,7 @@ func (u *Updater) Check(ctx context.Context) (*UpdateInfo, error) {
 		u.metricCheckFailure(err)
 		return nil, err
 	}
-	info := &UpdateInfo{Version: m.Version, Notes: m.Notes, Asset: asset}
+	info = &UpdateInfo{Version: m.Version, Notes: m.Notes, Asset: asset}
 	if compareVersion(latest, u.current) > 0 {
 		info.HasUpdate = true
 	}
@@ -165,7 +170,10 @@ func (u *Updater) Check(ctx context.Context) (*UpdateInfo, error) {
 }
 
 // Apply 执行完整更新流程（重新拉取清单 → 比较 → 下载 → 校验 → 替换）。
-func (u *Updater) Apply(ctx context.Context) (*UpdateInfo, error) {
+func (u *Updater) Apply(ctx context.Context) (info *UpdateInfo, err error) {
+	ctx, end := u.startTrace(ctx, "updatex.apply",
+		TraceAttr{Key: "updatex.current_version", Value: u.cfg.CurrentVersion})
+	defer func() { end(err) }()
 	m, err := u.cfg.Source.Latest(ctx)
 	if err != nil {
 		u.metricUpdateFailure(err)
@@ -220,6 +228,14 @@ func (u *Updater) Apply(ctx context.Context) (*UpdateInfo, error) {
 		Asset:           asset,
 		RestartRequired: restart,
 	}, nil
+}
+
+// startTrace 开始更新操作链路（无钩子时 no-op）。
+func (u *Updater) startTrace(ctx context.Context, name string, attrs ...TraceAttr) (context.Context, func(error)) {
+	if u.cfg.TraceHook == nil {
+		return ctx, func(error) {}
+	}
+	return u.cfg.TraceHook.Start(ctx, name, attrs...)
 }
 
 // verifyManifest 配置公钥时校验清单签名；未配置公钥则跳过。

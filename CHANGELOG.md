@@ -1,5 +1,17 @@
 # 更新日志
 
+## [v0.5.0] - 2026-08-10
+
+### 新增
+
+- `TraceHook` 链路追踪钩子（零依赖接口 + `Config.TraceHook`）：
+  Check / Apply 自动埋点（updatex.current_version 属性），
+  由 tracex 等外部适配器接入。
+
+### 质量
+
+- 根包与 source 包覆盖率保持 100%；race / vet 全绿。
+
 ## [v0.4.1] - 2026-08-10
 
 ### 修复
