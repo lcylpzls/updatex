@@ -43,6 +43,17 @@ func TestNewErrors(t *testing.T) {
 	}
 }
 
+// TestNewVVersion 覆盖带 v 前缀的当前版本初始化（issue #1）。
+func TestNewVVersion(t *testing.T) {
+	u, err := New(Config{Source: &stubSource{}, CurrentVersion: "v0.3.0", ExecutablePath: "x"})
+	if err != nil {
+		t.Fatalf("带 v 前缀版本应初始化成功：%v", err)
+	}
+	if got := u.current; got.major != 0 || got.minor != 3 || got.patch != 0 {
+		t.Fatalf("解析不符：%+v", got)
+	}
+}
+
 // TestApplySourceFailure 覆盖 Apply 的源失败分支。
 func TestApplySourceFailure(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{err: ErrFetchFailed},

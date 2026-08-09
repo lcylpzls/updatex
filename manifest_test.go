@@ -31,6 +31,12 @@ func TestParseManifest(t *testing.T) {
 	if _, err := m.AssetFor("windows", "amd64"); !errors.Is(err, ErrPlatformUnsupported) {
 		t.Fatalf("平台缺失应报错，实际：%v", err)
 	}
+	// 带 v 前缀的版本应可解析（issue #1）。
+	vManifest, err := ParseManifest([]byte(`{"version":"v1.1.0","platforms":{"x_y":` +
+		`{"url":"https://x","sha256":"` + strings.Repeat("ab", 32) + `"}}}`))
+	if err != nil || vManifest.Version != "v1.1.0" {
+		t.Fatalf("带 v 前缀清单应解析成功：%+v err=%v", vManifest, err)
+	}
 	for name, data := range map[string][]byte{
 		"空":        nil,
 		"超大":       make([]byte, 1<<20+1),

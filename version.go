@@ -16,11 +16,15 @@ type semver struct {
 	build      string
 }
 
-// parseVersion 解析语义化版本。
+// parseVersion 解析语义化版本；接受可选小写 v 前缀（如 v1.2.3），
+// 与 git tag 惯例及主流 semver 库行为一致。
 func parseVersion(s string) (semver, error) {
 	var v semver
 	if s == "" {
 		return v, ErrInvalidVersion
+	}
+	if strings.HasPrefix(s, "v") {
+		s = s[1:]
 	}
 	core := s
 	if i := strings.IndexByte(s, '+'); i >= 0 {

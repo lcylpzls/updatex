@@ -16,6 +16,8 @@ func TestParseVersion(t *testing.T) {
 		{"10.20.30-alpha.1", semver{major: 10, minor: 20, patch: 30, prerelease: "alpha.1"}},
 		{"1.0.0+build.5", semver{major: 1, build: "build.5"}},
 		{"1.0.0-rc.1+build.2", semver{major: 1, prerelease: "rc.1", build: "build.2"}},
+		{"v1.2.3", semver{major: 1, minor: 2, patch: 3}},
+		{"v1.2.3-rc.1+build.2", semver{major: 1, minor: 2, patch: 3, prerelease: "rc.1", build: "build.2"}},
 	}
 	for _, tc := range cases {
 		got, err := parseVersion(tc.in)
@@ -26,7 +28,7 @@ func TestParseVersion(t *testing.T) {
 			t.Fatalf("%q 解析不符：%+v != %+v", tc.in, got, tc.want)
 		}
 	}
-	for _, bad := range []string{"", "1.2", "1.2.3.4", "a.b.c", "01.2.3", "1.02.3", "1.2.3-", "1.2.3-01", "1.2.3-..1", "1.2.3-+x", "1.2.3-α"} {
+	for _, bad := range []string{"", "1.2", "1.2.3.4", "a.b.c", "01.2.3", "1.02.3", "1.2.3-", "1.2.3-01", "1.2.3-..1", "1.2.3-+x", "1.2.3-α", "v", "vv1.2.3", "V1.2.3"} {
 		if _, err := parseVersion(bad); !errors.Is(err, ErrInvalidVersion) {
 			t.Fatalf("%q 应报版本错误，实际：%v", bad, err)
 		}
@@ -52,6 +54,8 @@ func TestCompareVersion(t *testing.T) {
 		{"1.0.0-alpha.1", "1.0.0-beta", -1},
 		{"1.0.0-alpha.1", "1.0.0-alpha", 1},
 		{"1.0.0+abc", "1.0.0+xyz", 0},
+		{"v1.2.3", "1.2.3", 0},
+		{"v1.2.3-rc.1", "1.2.3-rc.2", -1},
 	}
 	for _, tc := range cases {
 		av, _ := parseVersion(tc.a)

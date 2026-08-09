@@ -11,7 +11,7 @@ import (
 
 // FuzzParseVersion 模糊测试版本解析：任意输入不得 panic。
 func FuzzParseVersion(f *testing.F) {
-	for _, seed := range []string{"", "1.0.0", "1.2.3-alpha.1+build.5", "01.2.3", "bad"} {
+	for _, seed := range []string{"", "1.0.0", "v1.2.3", "v1.2.3-alpha.1+build.5", "01.2.3", "bad", "v", "V1.2.3"} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
