@@ -69,8 +69,8 @@ jobs:
             prepare: apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl tar
           - distro: fedora:41
             prepare: dnf -y install git ca-certificates curl tar
-          - distro: opensuse/leap:15.6
-            prepare: zypper --non-interactive install git ca-certificates curl tar
+          - distro: rockylinux:9
+            prepare: dnf -y install --setopt=install_weak_deps=False git ca-certificates curl tar
           - distro: archlinux:latest
             prepare: pacman -Syu --noconfirm git ca-certificates curl tar
           - distro: alpine:3.20

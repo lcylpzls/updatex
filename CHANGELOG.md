@@ -12,7 +12,7 @@
 - 端到端测试断言真实协商 `HTTP/3.0` 协议；
 - 依赖升级：httpx v1.0.2（修复客户端超时取消 H2/H3 响应体）。
 - CI/Release 增加 Linux 多发行版容器矩阵（debian / fedora /
-  opensuse / archlinux / alpine，纯 Go 构建链路 CGO_ENABLED=0）。
+  rockylinux / archlinux / alpine，纯 Go 构建链路 CGO_ENABLED=0）。
 
 ### 说明
 

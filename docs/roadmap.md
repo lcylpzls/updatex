@@ -62,5 +62,5 @@ govulncheck ./...
 ```
 
 CI：ubuntu/windows/macos 三平台 + Linux 多发行版容器矩阵
-（debian / fedora / opensuse / archlinux / alpine，验证 glibc 与
+（debian / fedora / rockylinux / archlinux / alpine，验证 glibc 与
 musl 生态）+ fuzz job + govulncheck job + Release（tag 触发）。
