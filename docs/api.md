@@ -1,7 +1,8 @@
 # updatex API 定版
 
-> 版本：v0.0.0（规划定稿） · 以下签名在实现阶段按本文执行；
-> v0.1.0 前允许微调，v0.1.0 起冻结核心公开面。
+> 版本：v0.1.0（已发布） · 已实现签名与代码一致；
+> 标注 **[规划中]** 的公开面按路线图在后续版本落地，
+> v0.1.0 起冻结已实现的核心公开面。
 
 ## 1. 包结构
 
@@ -19,15 +20,16 @@ type Config struct {
 	Source           VersionSource
 	CurrentVersion   string
 	ExecutablePath   string
-	VerifyPublicKey  []byte
+	VerifyPublicKey  []byte  // [规划中 v0.3.0] Ed25519 签名校验
 	MaxDownloadBytes int64
 	AllowHTTP        bool
 	Logger           logx.Logger
 	Metrics          Metrics
-	HTTPClient       *http.Client
+	HTTPClient       *httpx.Client
 }
 
-func DefaultConfig() Config // MaxDownloadBytes=512MiB
+// [规划中] 默认配置构造（当前由 New 内部填充默认值）。
+func DefaultConfig() Config
 ```
 
 ### 2.2 UpdateInfo / Asset
@@ -71,7 +73,7 @@ type Manifest struct {
 
 func ParseManifest(data []byte) (*Manifest, error)
 func (m *Manifest) AssetFor(goos, goarch string) (Asset, error)
-func (m *Manifest) VerifySignature(publicKey []byte) error
+func (m *Manifest) VerifySignature(publicKey []byte) error // [规划中 v0.3.0]
 ```
 
 ## 3. 根包函数
@@ -101,9 +103,9 @@ func Bootstrap(ctx context.Context, executablePath string) error
 func NewHTTPSource(url string, allowHTTP bool, opts ...HTTPSourceOption) (*HTTPSource, error)
 func WithHTTP3(enable bool) HTTPSourceOption   // 切换 HTTP/3 传输
 func WithHTTP2(enable bool) HTTPSourceOption   // 切换 HTTP/2 传输
-func WithHTTPClient(client *httpx.Client) HTTPSourceOption // 注入自定义 httpx 客户端
+func WithHTTPClient(client httpClient) HTTPSourceOption    // 注入自定义客户端（*httpx.Client 可直接传入）
 
-// GitHub Releases 源（v0.3.0）
+// GitHub Releases 源（[规划中 v0.3.0]）
 func NewGitHubSource(repo string, opts ...GitHubOption) *GitHubSource
 func WithGitHubToken(token string) GitHubOption
 func WithGitHubClient(client *http.Client) GitHubOption
@@ -130,7 +132,7 @@ var (
 ## 6. 完整示例（规划）
 
 ```go
-src := source.NewHTTPSource("https://cdn.example.com/update.json", nil, false)
+src := source.NewHTTPSource("https://cdn.example.com/update.json", false)
 u, err := updatex.New(updatex.Config{
 	Source:         src,
 	CurrentVersion: "1.0.0",

@@ -10,6 +10,9 @@
 - SHA256 流式校验；Unix 原子替换；
 - errx 错误码全集、logx 结构化日志。
 
+> 状态：**已发布**（v0.1.0，2026-08-09）。根包与 source 包语句
+> 覆盖率 100%，CI 三平台全绿。
+
 ## v0.2.0 — Windows 与回滚
 
 - Windows 启动时替换（.new + .pending + Bootstrap）；

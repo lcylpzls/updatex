@@ -1,0 +1,19 @@
+# 测试产物
+coverage.out
+*.test
+*.prof
+
+# 构建产物
+bin/
+dist/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 本地临时文件
+*.tmp
+*.pending
+*.bak
