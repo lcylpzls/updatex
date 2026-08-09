@@ -50,6 +50,7 @@ jobs:
         run: go test -count=1 ./...
 
   release:
+    needs: linux-distros
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
