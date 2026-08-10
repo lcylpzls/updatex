@@ -13,7 +13,7 @@ import (
 
 	"github.com/lcylpzls/logx"
 	"github.com/lcylpzls/updatex"
-	"github.com/lcylpzls/webx"
+	"github.com/lcylpzls/webx/v2"
 )
 
 // Config 升级服务端配置。
