@@ -3,12 +3,12 @@ module github.com/lcylpzls/updatex/examples
 go 1.26.5
 
 require (
-	github.com/lcylpzls/clix v1.3.0
-	github.com/lcylpzls/httpx v1.1.3
-	github.com/lcylpzls/logx v1.2.5
-	github.com/lcylpzls/testx v1.3.0
-	github.com/lcylpzls/updatex v0.9.0
-	github.com/lcylpzls/webx v1.3.0
+	github.com/lcylpzls/clix v1.4.0
+	github.com/lcylpzls/httpx v1.2.1
+	github.com/lcylpzls/logx v1.3.0
+	github.com/lcylpzls/testx v1.4.1
+	github.com/lcylpzls/updatex v1.0.0
+	github.com/lcylpzls/webx v1.5.2
 )
 
 require (
