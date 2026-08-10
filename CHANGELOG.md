@@ -1,5 +1,21 @@
 # 更新日志
 
+## [v0.9.0] - 2026-08-10
+
+### 变更
+
+- 加密能力统一迁移至 `cryptox`：
+  - 清单 Ed25519 验签改用 `cryptox.VerifyEd25519`，尺寸校验改用
+    `cryptox.Ed25519PublicKeySize` / `cryptox.Ed25519SignatureSize`；
+  - 资产流式 SHA256 校验改用 `cryptox.SHA256Hex`，摘要比较改用
+    `cryptox.ConstantTimeEquals`；
+  - 去除对 `crypto/ed25519`、`crypto/sha256`、`crypto/subtle` 的直接引用。
+
+### 质量
+
+- 根包与 source 子包语句覆盖率保持 100%；race / vet / staticcheck /
+  govulncheck 全绿。
+
 ## [v0.8.1] - 2026-08-10
 
 ### 变更

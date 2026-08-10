@@ -2,7 +2,6 @@ package updatex
 
 import (
 	"context"
-	"crypto/ed25519"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lcylpzls/cryptox"
 	"github.com/lcylpzls/errx"
 	"github.com/lcylpzls/httpx"
 	"github.com/lcylpzls/logx"
@@ -109,7 +109,7 @@ func New(cfg Config) (*Updater, error) {
 	if cfg.MaxDownloadBytes < 0 {
 		return nil, errInvalidConfig("下载大小上限不能为负")
 	}
-	if len(cfg.VerifyPublicKey) > 0 && len(cfg.VerifyPublicKey) != ed25519.PublicKeySize {
+	if len(cfg.VerifyPublicKey) > 0 && len(cfg.VerifyPublicKey) != cryptox.Ed25519PublicKeySize {
 		return nil, errInvalidConfig("Ed25519 公钥长度非法")
 	}
 	execPath := cfg.ExecutablePath

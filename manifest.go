@@ -1,11 +1,11 @@
 package updatex
 
 import (
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"time"
 
+	"github.com/lcylpzls/cryptox"
 	"github.com/lcylpzls/errx"
 )
 
@@ -66,21 +66,21 @@ func ParseManifest(data []byte) (*Manifest, error) {
 // 签名载荷为签名置空后的规范化 JSON（字段顺序与 map 排序由
 // encoding/json 保证，发布时间按原始表示序列化）。
 func (m *Manifest) VerifySignature(publicKey []byte) error {
-	if len(publicKey) != ed25519.PublicKeySize {
+	if len(publicKey) != cryptox.Ed25519PublicKeySize {
 		return errx.New(errx.KindInvalid, CodeSignatureInvalid, "Ed25519 公钥长度非法")
 	}
 	if m.Signature == "" {
 		return ErrSignatureInvalid
 	}
 	sig, err := base64.StdEncoding.DecodeString(m.Signature)
-	if err != nil || len(sig) != ed25519.SignatureSize {
+	if err != nil || len(sig) != cryptox.Ed25519SignatureSize {
 		return ErrSignatureInvalid
 	}
 	payload, err := m.signedPayload()
 	if err != nil {
 		return errx.Wrap(err, errx.KindInvalid, CodeSignatureInvalid, "签名载荷序列化失败")
 	}
-	if !ed25519.Verify(publicKey, payload, sig) {
+	if !cryptox.VerifyEd25519(publicKey, payload, sig) {
 		return ErrSignatureInvalid
 	}
 	return nil
