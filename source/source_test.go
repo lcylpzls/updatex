@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,9 +93,8 @@ func TestLatest(t *testing.T) {
 	defer srv.Close()
 	ctx := context.Background()
 	s, err := NewHTTPSource(srv.URL+"/update.json", true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	m, err := s.Latest(ctx)
 	if err != nil || m.Version != "1.1.0" {
 		t.Fatalf("拉取失败：%+v err=%v", m, err)

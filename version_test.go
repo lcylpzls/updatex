@@ -2,6 +2,7 @@ package updatex
 
 import (
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"testing"
 )
 
@@ -21,12 +22,10 @@ func TestParseVersion(t *testing.T) {
 	}
 	for _, tc := range cases {
 		got, err := parseVersion(tc.in)
-		if err != nil {
-			t.Fatalf("%q 应解析成功：%v", tc.in, err)
-		}
-		if got != tc.want {
-			t.Fatalf("%q 解析不符：%+v != %+v", tc.in, got, tc.want)
-		}
+		testx.RequireNoError(t, err)
+
+		testx.RequireEqual(t, got, tc.want)
+
 	}
 	for _, bad := range []string{"", "1.2", "1.2.3.4", "a.b.c", "01.2.3", "1.02.3", "1.2.3-", "1.2.3-01", "1.2.3-..1", "1.2.3-+x", "1.2.3-α", "v", "vv1.2.3", "V1.2.3"} {
 		if _, err := parseVersion(bad); !errors.Is(err, ErrInvalidVersion) {

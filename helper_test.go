@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	testx "github.com/lcylpzls/testx"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,9 +20,8 @@ import (
 func signManifest(t *testing.T, m *Manifest, priv ed25519.PrivateKey) {
 	t.Helper()
 	payload, err := m.signedPayload()
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	m.Signature = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, payload))
 }
 

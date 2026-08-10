@@ -5,6 +5,7 @@ package updatex
 import (
 	"context"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,9 +24,8 @@ func TestApplyWindowsSuccess(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{
 		manifest: newStubManifest("1.1.0", srv.URL+"/download", sha)},
 		CurrentVersion: "1.0.0", ExecutablePath: target, AllowHTTP: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	info, err := u.Apply(context.Background())
 	if err != nil || !info.RestartRequired || info.Version != "1.1.0" {
 		t.Fatalf("延迟替换应返回重启需求：info=%+v err=%v", info, err)
@@ -61,9 +61,8 @@ func TestApplyWindowsPendingWriteFailure(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{
 		manifest: newStubManifest("1.1.0", srv.URL+"/download", sha)},
 		CurrentVersion: "1.0.0", ExecutablePath: target, AllowHTTP: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	origWrite := writeFile
 	writeFile = func(string, []byte, os.FileMode) error { return errors.New("写入失败") }
 	defer func() { writeFile = origWrite }()
@@ -129,9 +128,8 @@ func TestApplyWindowsFlow(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{
 		manifest: newStubManifest("1.1.0", srv.URL+"/download", sha)},
 		CurrentVersion: "1.0.0", ExecutablePath: "x", AllowHTTP: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	info, err := u.Apply(context.Background())
 	if err != nil || !info.RestartRequired {
 		t.Fatalf("注入替换应返回重启需求：info=%+v err=%v", info, err)

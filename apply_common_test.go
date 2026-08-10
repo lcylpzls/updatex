@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -111,16 +112,14 @@ func TestApplySignature(t *testing.T) {
 	srv, sha := assetServer(t, "new")
 	defer srv.Close()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	m := newStubManifest("1.1.0", srv.URL+"/download", sha)
 	signManifest(t, m, priv)
 	u, err := New(Config{Source: &stubSource{manifest: m},
 		CurrentVersion: "1.0.0", ExecutablePath: "x", AllowHTTP: true, VerifyPublicKey: pub})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if _, err := u.Apply(context.Background()); err != nil {
 		t.Fatalf("合法签名应通过应用：%v", err)
 	}

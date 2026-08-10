@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	testx "github.com/lcylpzls/testx"
 	"strings"
 	"testing"
 )
@@ -66,9 +67,8 @@ func FuzzVerifySHA256(f *testing.F) {
 // FuzzVerifySignature 模糊测试签名校验：任意输入不得 panic。
 func FuzzVerifySignature(f *testing.F) {
 	pub, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		f.Fatal(err)
-	}
+	testx.RequireNoError(f, err)
+
 	f.Add([]byte(`{"version":"1.0.0","platforms":{"x_y":{"url":"https://x/a","sha256":"`+strings.Repeat("ab", 32)+`"}}}`), []byte(pub), []byte("c2ln"))
 	f.Add([]byte(nil), []byte(nil), []byte(nil))
 	f.Fuzz(func(t *testing.T, data, key, sig []byte) {

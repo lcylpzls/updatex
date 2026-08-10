@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"os"
 	"runtime"
 	"strings"
@@ -46,9 +47,8 @@ func TestNewErrors(t *testing.T) {
 // TestNewVVersion 覆盖带 v 前缀的当前版本初始化（issue #1）。
 func TestNewVVersion(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{}, CurrentVersion: "v0.3.0", ExecutablePath: "x"})
-	if err != nil {
-		t.Fatalf("带 v 前缀版本应初始化成功：%v", err)
-	}
+	testx.RequireNoError(t, err)
+
 	if got := u.current; got.major != 0 || got.minor != 3 || got.patch != 0 {
 		t.Fatalf("解析不符：%+v", got)
 	}
@@ -58,9 +58,8 @@ func TestNewVVersion(t *testing.T) {
 func TestApplySourceFailure(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{err: ErrFetchFailed},
 		CurrentVersion: "1.0.0", ExecutablePath: "x"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if _, err := u.Apply(context.Background()); !errors.Is(err, ErrFetchFailed) {
 		t.Fatalf("源失败应透传，实际：%v", err)
 	}
@@ -71,9 +70,8 @@ func TestCheck(t *testing.T) {
 	ctx := context.Background()
 	src := &stubSource{manifest: newStubManifest("1.1.0", "https://x/download", strings.Repeat("ab", 32))}
 	u, err := New(Config{Source: src, CurrentVersion: "1.0.0", ExecutablePath: "x"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	info, err := u.Check(ctx)
 	if err != nil || !info.HasUpdate || info.Version != "1.1.0" {
 		t.Fatalf("应有更新：%+v err=%v", info, err)
@@ -108,16 +106,14 @@ func TestCheck(t *testing.T) {
 func TestCheckSignature(t *testing.T) {
 	ctx := context.Background()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	base := newStubManifest("1.1.0", "https://x/download", strings.Repeat("ab", 32))
 	signManifest(t, base, priv)
 	u, err := New(Config{Source: &stubSource{manifest: base},
 		CurrentVersion: "1.0.0", ExecutablePath: "x", VerifyPublicKey: pub})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if _, err := u.Check(ctx); err != nil {
 		t.Fatalf("合法签名应通过检查：%v", err)
 	}
@@ -149,9 +145,8 @@ func TestMetricsAndLog(t *testing.T) {
 	}
 	u, err := New(Config{Source: &stubSource{manifest: newStubManifest("1.1.0", "https://x", strings.Repeat("ab", 32))},
 		CurrentVersion: "1.0.0", ExecutablePath: "x", Metrics: m, Logger: testLogger()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	_, _ = u.Check(context.Background())
 	if checkTotal.Load() != 1 {
 		t.Fatalf("检查计数应为 1：%d", checkTotal.Load())

@@ -3,6 +3,7 @@ package updatex
 import (
 	"context"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"sync"
 	"testing"
 )
@@ -57,9 +58,8 @@ func TestTraceHook(t *testing.T) {
 		AllowHTTP:      true,
 		TraceHook:      hook,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if _, err := u.Check(context.Background()); err != nil {
 		t.Fatal(err)
 	}

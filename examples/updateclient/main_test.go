@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	testx "github.com/lcylpzls/testx"
 	"io"
 	"os"
 	"path/filepath"
@@ -33,9 +34,8 @@ func TestRunHTTP3Upgrade(t *testing.T) {
 		Asset:     asset,
 		OnRequest: record,
 	}, certFile, keyFile, "127.0.0.1:0", testLogger())
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	defer s.Stop(context.Background())
 
 	target := filepath.Join(t.TempDir(), "app")
@@ -65,9 +65,7 @@ func TestRunHTTP3Upgrade(t *testing.T) {
 		}
 	}
 	mu.Unlock()
-	if !hitHTTP3 {
-		t.Fatalf("未观察到 HTTP/3 请求，实际协议：%v", protos)
-	}
+	testx.RequireTrue(t, hitHTTP3)
 
 	// 已是最新版本：不替换。
 	opts.CurrentVersion = "1.1.0"

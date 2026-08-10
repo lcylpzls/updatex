@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	testx "github.com/lcylpzls/testx"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -85,9 +86,8 @@ func TestGitHubLatest(t *testing.T) {
 	srv := githubFixture(t, "tok", shaName, func(u string) string { return releaseBody(u, shaName) })
 	defer srv.Close()
 	s, err := NewGitHubSource("o/r", WithGitHubToken("tok"), withAPIBase(srv.URL))
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	m, err := s.Latest(ctx)
 	if err != nil || m.Version != "1.1.0" || m.Notes != "更新说明" || m.PublishedAt.IsZero() {
 		t.Fatalf("拉取失败：%+v err=%v", m, err)
@@ -167,9 +167,8 @@ func TestGitHubSHA256(t *testing.T) {
 	})
 	defer srv.Close()
 	s, err := NewGitHubSource("o/r", withAPIBase(srv.URL))
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if _, err := s.Latest(ctx); !errors.Is(err, updatex.ErrManifestInvalid) {
 		t.Fatalf("缺校验和应报清单错误，实际：%v", err)
 	}
@@ -206,9 +205,8 @@ func TestParseSHA256File(t *testing.T) {
 func TestGitHubClientError(t *testing.T) {
 	wantErr := errors.New("请求失败")
 	s, err := NewGitHubSource("o/r", WithGitHubClient(&stubHTTPClient{err: wantErr}))
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if _, err := s.Latest(context.Background()); !errors.Is(err, wantErr) {
 		t.Fatalf("请求错误应透传，实际：%v", err)
 	}

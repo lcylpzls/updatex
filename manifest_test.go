@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"strings"
 	"testing"
 
@@ -17,9 +18,8 @@ func TestParseManifest(t *testing.T) {
 		`"notes":"升级","platforms":{"linux_amd64":{"url":"https://x/a","sha256":"` +
 		strings.Repeat("ab", 32) + `","size":10}},"signature":"sig"}`
 	m, err := ParseManifest([]byte(good))
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if m.Version != "1.1.0" || m.Notes != "升级" || m.Signature != "sig" ||
 		m.PublishedAt.IsZero() {
 		t.Fatalf("清单解析不符：%+v", m)
@@ -59,9 +59,8 @@ func TestParseManifest(t *testing.T) {
 // TestVerifySignature 覆盖 Ed25519 签名校验分支。
 func TestVerifySignature(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	m := &Manifest{Version: "1.1.0", Notes: "说明",
 		Platforms: map[string]Asset{"x_y": {URL: "https://x", SHA256: strings.Repeat("ab", 32)}}}
 	signManifest(t, m, priv)

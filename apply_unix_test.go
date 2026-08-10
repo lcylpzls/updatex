@@ -5,6 +5,7 @@ package updatex
 import (
 	"context"
 	"errors"
+	testx "github.com/lcylpzls/testx"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,9 +24,8 @@ func TestApplySuccess(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{
 		manifest: newStubManifest("1.1.0", srv.URL+"/download", sha)},
 		CurrentVersion: "1.0.0", ExecutablePath: target, AllowHTTP: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	info, err := u.Apply(context.Background())
 	if err != nil || info.Version != "1.1.0" || info.RestartRequired {
 		t.Fatalf("更新失败：%+v err=%v", info, err)
@@ -76,9 +76,7 @@ func TestApplyRollback(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{
 		manifest: newStubManifest("1.1.0", srv.URL+"/download", sha)},
 		CurrentVersion: "1.0.0", ExecutablePath: target, AllowHTTP: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
 
 	// 第一次 rename（备份）成功，第二次 rename（新版本落位）失败，
 	// 第三次 rename（恢复备份）成功：应返回替换失败并恢复旧版本。

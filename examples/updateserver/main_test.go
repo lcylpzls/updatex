@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	testx "github.com/lcylpzls/testx"
 	"io"
 	"sync"
 	"testing"
@@ -45,9 +46,8 @@ func TestHTTP3UpdateServer(t *testing.T) {
 		Asset:     asset,
 		OnRequest: record,
 	}, certFile, keyFile, "127.0.0.1:0", testLogger())
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	defer s.Stop(context.Background())
 
 	client, err := httpx.New(
@@ -55,23 +55,20 @@ func TestHTTP3UpdateServer(t *testing.T) {
 		httpx.WithProtocol(httpx.ProtocolHTTP3),
 		httpx.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	base := "https://" + addr
 
 	resp, err := client.Get(ctx, base+"/update.json")
-	if err != nil {
-		t.Fatalf("拉取清单失败：%v", err)
-	}
+	testx.RequireNoError(t, err)
+
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("清单状态码非 200：%d", resp.StatusCode)
 	}
 	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	var m updatex.Manifest
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatalf("清单 JSON 解析失败：%v", err)
@@ -81,14 +78,12 @@ func TestHTTP3UpdateServer(t *testing.T) {
 	}
 
 	resp2, err := client.Get(ctx, base+"/download")
-	if err != nil {
-		t.Fatalf("下载资产失败：%v", err)
-	}
+	testx.RequireNoError(t, err)
+
 	defer resp2.Body.Close()
 	body, err := io.ReadAll(resp2.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testx.RequireNoError(t, err)
+
 	if string(body) != string(asset) {
 		t.Fatalf("资产内容不符：%q", body)
 	}
@@ -102,7 +97,6 @@ func TestHTTP3UpdateServer(t *testing.T) {
 			break
 		}
 	}
-	if !hitHTTP3 {
-		t.Fatalf("未观察到 HTTP/3 请求，实际协议：%v", protos)
-	}
+	testx.RequireTrue(t, hitHTTP3)
+
 }
