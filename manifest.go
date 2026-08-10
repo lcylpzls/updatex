@@ -2,11 +2,13 @@ package updatex
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 
 	"github.com/lcylpzls/cryptox"
 	"github.com/lcylpzls/errx"
+	"github.com/lcylpzls/validx"
 )
 
 // manifestMarshal 可替换的 JSON 序列化（测试注入用）。
@@ -109,31 +111,10 @@ func errInvalidManifest(msg string) error {
 
 // parseHexSHA256 校验 SHA256 十六进制格式。
 func parseHexSHA256(s string) ([]byte, error) {
-	if len(s) != 64 {
+	if err := validx.ValidateField(s, "hexadecimal,len=64"); err != nil {
 		return nil, errInvalidManifest("SHA256 必须为 64 位十六进制")
 	}
-	out := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		hi, ok1 := hexVal(s[i*2])
-		lo, ok2 := hexVal(s[i*2+1])
-		if !ok1 || !ok2 {
-			return nil, errInvalidManifest("SHA256 含非法字符")
-		}
-		out[i] = hi<<4 | lo
-	}
-	return out, nil
-}
-
-// hexVal 十六进制字符转数值。
-func hexVal(c byte) (byte, bool) {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0', true
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10, true
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10, true
-	default:
-		return 0, false
-	}
+	// validx hexadecimal 保证可解码。
+	b, _ := hex.DecodeString(s)
+	return b, nil
 }

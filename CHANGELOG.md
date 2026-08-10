@@ -1,5 +1,19 @@
 # 更新日志
 
+## [v0.10.0] - 2026-08-10
+
+### 变更
+
+- 格式判定统一复用家族 `validx` 内置规则：
+  - SHA256 校验和判定改用 `validx.ValidateField(s, "hexadecimal,len=64")`；
+  - 语义化版本格式前置判定改用 `validx.ValidateField(s, "semver")`；
+  - 保留 updatex 更严语义（主版本号数字段前导零拒绝），解析器结构不变。
+
+### 质量
+
+- 根包与 source 子包语句覆盖率保持 100%；race / vet / staticcheck /
+  govulncheck 全绿。
+
 ## [v0.9.0] - 2026-08-10
 
 ### 变更

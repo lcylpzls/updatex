@@ -7,7 +7,8 @@ require (
 	github.com/lcylpzls/errx v1.4.0
 	github.com/lcylpzls/httpx v1.0.2
 	github.com/lcylpzls/logx v1.1.0
-	github.com/lcylpzls/testx v1.2.0
+	github.com/lcylpzls/testx v1.2.1
+	github.com/lcylpzls/validx v1.2.2
 )
 
 require (

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lcylpzls/errx"
+	"github.com/lcylpzls/validx"
 )
 
 // semver 轻量语义化版本（主.次.补丁，可选预发布与构建元数据）。
@@ -23,6 +24,10 @@ func parseVersion(s string) (semver, error) {
 	if s == "" {
 		return v, ErrInvalidVersion
 	}
+	// 格式判定复用 validx 内置 semver 规则（支持可选小写 v 前缀）。
+	if err := validx.ValidateField(s, "semver"); err != nil {
+		return v, errInvalidVersion(s)
+	}
 	s = strings.TrimPrefix(s, "v")
 	core := s
 	if i := strings.IndexByte(s, '+'); i >= 0 {
@@ -30,16 +35,10 @@ func parseVersion(s string) (semver, error) {
 		core = s[:i]
 	}
 	if i := strings.IndexByte(core, '-'); i >= 0 {
-		if i == len(core)-1 {
-			return v, errInvalidVersion(s)
-		}
 		v.prerelease = core[i+1:]
 		core = core[:i]
 	}
 	parts := strings.Split(core, ".")
-	if len(parts) != 3 {
-		return v, errInvalidVersion(s)
-	}
 	nums := []*int64{&v.major, &v.minor, &v.patch}
 	for i, p := range parts {
 		n, err := strconv.ParseInt(p, 10, 64)
@@ -48,10 +47,15 @@ func parseVersion(s string) (semver, error) {
 		}
 		*nums[i] = n
 	}
-	if v.prerelease == "" || validPrerelease(v.prerelease) {
-		return v, nil
+	// validx semver 允许数字段前导零，updatex 语义更严：预发布数字段拒绝前导零。
+	if v.prerelease != "" {
+		for _, part := range strings.Split(v.prerelease, ".") {
+			if len(part) > 1 && part[0] == '0' {
+				return v, errInvalidVersion(s)
+			}
+		}
 	}
-	return v, errInvalidVersion(s)
+	return v, nil
 }
 
 // compare 比较版本：a<b 返回 -1，a==b 返回 0，a>b 返回 1。
@@ -101,24 +105,6 @@ func compareIdent(a, b string) int {
 	default:
 		return strings.Compare(a, b)
 	}
-}
-
-// validPrerelease 校验预发布标识符格式。
-func validPrerelease(s string) bool {
-	for _, part := range strings.Split(s, ".") {
-		if part == "" {
-			return false
-		}
-		for i, r := range part {
-			if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-') {
-				return false
-			}
-			if r >= '0' && r <= '9' && i == 0 && len(part) > 1 {
-				return false // 前导零数字段非法。
-			}
-		}
-	}
-	return true
 }
 
 // cmpInt 比较整数。

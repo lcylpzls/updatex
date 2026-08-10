@@ -27,7 +27,7 @@ func TestParseVersion(t *testing.T) {
 		testx.RequireEqual(t, got, tc.want)
 
 	}
-	for _, bad := range []string{"", "1.2", "1.2.3.4", "a.b.c", "01.2.3", "1.02.3", "1.2.3-", "1.2.3-01", "1.2.3-..1", "1.2.3-+x", "1.2.3-α", "v", "vv1.2.3", "V1.2.3"} {
+	for _, bad := range []string{"", "1.2", "1.2.3.4", "a.b.c", "01.2.3", "1.02.3", "1.2.3-", "1.2.3-01", "1.2.3-..1", "1.2.3-+x", "1.2.3-α", "v", "vv1.2.3", "V1.2.3", "99999999999999999999999999.0.0"} {
 		if _, err := parseVersion(bad); !errors.Is(err, ErrInvalidVersion) {
 			t.Fatalf("%q 应报版本错误，实际：%v", bad, err)
 		}
