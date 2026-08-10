@@ -6,11 +6,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/hex"
-	"flag"
-	"fmt"
 	"os"
 	"time"
 
+	"github.com/lcylpzls/clix"
 	"github.com/lcylpzls/httpx"
 	_ "github.com/lcylpzls/httpx/http3" // 注册 HTTP/3 传输
 	"github.com/lcylpzls/logx"
@@ -30,47 +29,50 @@ type Options struct {
 }
 
 func main() {
-	var (
-		manifest  = flag.String("manifest", "", "发布清单 URL")
-		current   = flag.String("current", "1.0.0", "当前版本")
-		target    = flag.String("target", "", "目标可执行文件路径")
-		http3     = flag.Bool("http3", true, "使用 HTTP/3 传输")
-		allowHTTP = flag.Bool("allow-http", false, "允许明文 HTTP（仅测试）")
-		insecure  = flag.Bool("insecure", true, "跳过 TLS 证书校验（自签证书示例）")
-		verifyKey = flag.String("verify-key", "", "Ed25519 公钥（十六进制，可选）")
+	app, err := clix.New("updateclient", "0.7.0",
+		clix.WithDescription("HTTP/3 升级客户端示例"),
+		clix.WithIO(os.Stdout, os.Stderr),
+		clix.WithGlobalFlags(
+			clix.StringFlag("manifest", "发布清单 URL").Required(),
+			clix.StringFlag("current", "当前版本").Default("1.0.0"),
+			clix.StringFlag("target", "目标可执行文件路径").Required(),
+			clix.BoolFlag("http3", "使用 HTTP/3 传输").Default(true),
+			clix.BoolFlag("allow-http", "允许明文 HTTP（仅测试）").Default(false),
+			clix.BoolFlag("insecure", "跳过 TLS 证书校验（自签证书示例）").Default(true),
+			clix.StringFlag("verify-key", "Ed25519 公钥（十六进制，可选）"),
+		),
+		clix.WithRootAction(runClient),
 	)
-	flag.Parse()
-	if *manifest == "" || *target == "" {
-		fmt.Fprintln(os.Stderr, "用法：updateclient -manifest URL -target 目标文件 [-current 版本] [-http3] [-insecure] [-verify-key 公钥]")
-		os.Exit(2)
+	if err != nil {
+		panic(err)
 	}
+	os.Exit(app.Execute(context.Background(), os.Args[1:]))
+}
+
+// runClient 执行完整升级流程（clix 根 Action）。
+func runClient(ctx context.Context, c *clix.Context) error {
 	var pub []byte
-	if *verifyKey != "" {
-		keyBytes, err := hex.DecodeString(*verifyKey)
+	if v := c.GlobalString("verify-key"); v != "" {
+		keyBytes, err := hex.DecodeString(v)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "公钥不是合法十六进制：%v\n", err)
-			os.Exit(1)
+			return err
 		}
 		pub = keyBytes
 	}
 	logger, err := logx.NewBuilder().EnableWriter(os.Stdout, logx.InfoLevel).Build()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "初始化日志失败：%v\n", err)
-		os.Exit(1)
+		return err
 	}
 	opts := Options{
-		ManifestURL:     *manifest,
-		CurrentVersion:  *current,
-		Target:          *target,
-		AllowHTTP:       *allowHTTP,
-		UseHTTP3:        *http3,
-		InsecureTLS:     *insecure,
+		ManifestURL:     c.GlobalString("manifest"),
+		CurrentVersion:  c.GlobalString("current"),
+		Target:          c.GlobalString("target"),
+		AllowHTTP:       c.GlobalBool("allow-http"),
+		UseHTTP3:        c.GlobalBool("http3"),
+		InsecureTLS:     c.GlobalBool("insecure"),
 		VerifyPublicKey: pub,
 	}
-	if err := run(context.Background(), opts, logger); err != nil {
-		fmt.Fprintf(os.Stderr, "升级失败：%v\n", err)
-		os.Exit(1)
-	}
+	return run(ctx, opts, logger)
 }
 
 // run 执行完整升级流程（测试与命令共用）。
