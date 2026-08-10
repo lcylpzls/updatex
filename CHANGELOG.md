@@ -1,5 +1,12 @@
 # 更新日志
 
+## [v1.0.4] - 2026-08-10
+
+### 变更
+
+- Trace 契约统一为 `tracex.TraceHook`（类型别名，调用点不变）；
+- 依赖升级：tracex v1.0.4、httpx v1.2.5、cryptox v1.0.4、resiliencex v1.3.4、errx v1.5.7、logx v1.3.4、validx v1.2.6、testx v1.4.5。
+
 ## [v1.0.3] - 2026-08-10
 
 ### 变更
