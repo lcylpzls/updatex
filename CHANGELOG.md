@@ -1,6 +1,24 @@
 # 更新日志
 
 
+
+## [v1.3.0] - 2026-08-12
+
+### 新增
+
+- 服务端封装 `NewServer(assetsDir, opts...)`：
+  - 清单路由（默认 `/updates/manifest.json`，`Reload()` 热更新）；
+  - 资产静态服务（默认 `/updates/assets/`，含路径穿越防护）；
+  - 管理路由（默认 `/updates/admin/status`，`X-Api-Token` 常量时间鉴权，
+    `HandleAdmin` 可追加自定义管理路由）；
+  - 全局中间件热插拔（`Use`），`RegisterTo` 可挂入外部 mux；
+- 配套选项：`WithAdminToken` / `WithManifestPath` /
+  `WithManifestURL` / `WithAssetsURL`。
+
+### 质量
+
+- 全部包语句覆盖率 100%；race / vet / staticcheck 全绿。
+
 ## [v1.2.0] - 2026-08-11
 
 ### 破坏性变更

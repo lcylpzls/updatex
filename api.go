@@ -44,6 +44,9 @@ type (
 	TraceHook     = core.TraceHook
 	Manifest      = core.Manifest
 	Asset         = core.Asset
+	Server        = core.Server
+	ServerOption  = core.ServerOption
+	Middleware    = core.Middleware
 )
 
 func New(cfg Config) (*Updater, error) { return core.New(cfg) }
@@ -51,3 +54,10 @@ func Bootstrap(ctx context.Context, executablePath string) error {
 	return core.Bootstrap(ctx, executablePath)
 }
 func ParseManifest(data []byte) (*Manifest, error) { return core.ParseManifest(data) }
+func NewServer(assetsDir string, opts ...ServerOption) (*Server, error) {
+	return core.NewServer(assetsDir, opts...)
+}
+func WithAdminToken(token string) ServerOption  { return core.WithAdminToken(token) }
+func WithManifestPath(path string) ServerOption { return core.WithManifestPath(path) }
+func WithManifestURL(path string) ServerOption  { return core.WithManifestURL(path) }
+func WithAssetsURL(path string) ServerOption    { return core.WithAssetsURL(path) }
