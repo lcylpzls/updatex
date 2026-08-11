@@ -1,8 +1,6 @@
 # updatex API 定版
 
-> 版本：v0.4.0（已发布） · 已实现签名与代码一致；
-> 标注 **[规划中]** 的公开面按路线图在后续版本落地，
-> v0.1.0 起冻结已实现的核心公开面。
+> 版本：v1.1.1 · 已实现签名与代码一致。
 
 ## 1. 包结构
 
@@ -28,8 +26,6 @@ type Config struct {
 	HTTPClient       *httpx.Client
 }
 
-// [规划中] 默认配置构造（当前由 New 内部填充默认值）。
-func DefaultConfig() Config
 ```
 
 ### 2.2 UpdateInfo / Asset
@@ -139,7 +135,7 @@ var (
 )
 ```
 
-## 6. 完整示例（规划）
+## 6. 完整示例
 
 ```go
 src := source.NewHTTPSource("https://cdn.example.com/update.json", false)

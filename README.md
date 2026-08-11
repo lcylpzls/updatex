@@ -3,8 +3,7 @@
 自研程序自动升级库：集成后程序具备版本检查、下载校验、原子替换
 与重启能力，与 errx / logx / confx / httpx 生态打通。
 
-> 当前状态：**v0.4.1（v 前缀兼容修复）已发布**。发布前终审
-> 与自主打磨按路线图持续推进。
+> 当前状态：**v1.1.1**。
 
 ## 定位
 
@@ -67,7 +66,7 @@ u, err := updatex.New(updatex.Config{
 - v0.3.0：GitHub Releases 源与 Ed25519 清单签名校验。
 - v0.4.0：webx 服务端 + httpx 客户端 HTTP/3 端到端升级示例。
 
-详细版本规划见 [docs/roadmap.md](docs/roadmap.md)，更新记录见
+文档索引见 [docs/README.md](docs/README.md)，更新记录见
 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 目录
@@ -76,11 +75,8 @@ u, err := updatex.New(updatex.Config{
 updatex/
 ├── docs/
 │   ├── README.md          # 文档索引
-│   ├── design.md          # 设计定版（定位/范围/数据流/错误码）
 │   ├── architecture.md    # 架构详解（组件/状态机/平台时序/安全模型）
 │   ├── api.md             # API 定版（完整签名与语义）
-│   ├── research.md        # 领域调研与设计取舍
-│   └── roadmap.md         # 版本路线
 ├── examples/
 │   ├── updateserver/      # webx HTTP/3 升级服务端
 │   └── updateclient/      # httpx HTTP/3 升级客户端
