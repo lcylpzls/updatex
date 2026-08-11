@@ -8,7 +8,7 @@ require (
 	github.com/lcylpzls/httpx v1.2.5
 	github.com/lcylpzls/logx v1.3.4
 	github.com/lcylpzls/testx v1.4.5
-	github.com/lcylpzls/tracex v1.2.0
+	github.com/lcylpzls/tracex/contract v1.0.0
 	github.com/lcylpzls/validx v1.2.6
 )
 
@@ -21,6 +21,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/lcylpzls/metricsx v1.5.4 // indirect
 	github.com/lcylpzls/resiliencex v1.3.4 // indirect
+	github.com/lcylpzls/tracex v1.0.4 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.61.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
