@@ -1,4 +1,4 @@
-package updatex
+package core
 
 import (
 	"crypto/ed25519"

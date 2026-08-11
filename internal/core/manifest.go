@@ -1,4 +1,4 @@
-package updatex
+package core
 
 import (
 	"encoding/base64"

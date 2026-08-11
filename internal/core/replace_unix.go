@@ -1,6 +1,6 @@
 //go:build !windows
 
-package updatex
+package core
 
 import (
 	"os"
