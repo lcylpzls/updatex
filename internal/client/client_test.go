@@ -68,6 +68,32 @@ func newManifestServer(t *testing.T, version string, asset []byte, shaOverride s
 	return srv
 }
 
+// newUpdatesManifestServer 构造默认路由（/updates/...）与占位资产地址的测试服务器。
+func newUpdatesManifestServer(t *testing.T, version string, asset []byte) (*httptest.Server, *[]string) {
+	t.Helper()
+	sum := sha256.Sum256(asset)
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case "/updates/manifest.json":
+			m := fmt.Sprintf(`{"version":%q,"published_at":"2026-08-12T00:00:00Z",`+
+				`"notes":"发布说明","platforms":{%q:{"url":%q,"sha256":%q,"size":%d}}}`,
+				version, runtime.GOOS+"_"+runtime.GOARCH,
+				"https://update.invalid/updates/assets/app.bin",
+				hex.EncodeToString(sum[:]), len(asset))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(m))
+		case "/updates/assets/app.bin":
+			_, _ = w.Write(asset)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &paths
+}
+
 // baseConfig 构造一次更新测试的基础配置。
 func baseConfig(srv *httptest.Server, target, current string, action AfterUpdateAction) Config {
 	return Config{
@@ -161,9 +187,9 @@ func TestNewClientBuildErrors(t *testing.T) {
 	testx.RequireTrue(t, err != nil)
 
 	if _, err := NewClient(Config{
-		ManifestURL:     "https://x/update.json",
-		CurrentVersion:  "1.0.0",
-		AfterUpdate:     AfterUpdateContinue,
+		ManifestURL:      "https://x/update.json",
+		CurrentVersion:   "1.0.0",
+		AfterUpdate:      AfterUpdateContinue,
 		MaxDownloadBytes: -1,
 	}); !errx.Is(err, core.CodeInvalidConfig) {
 		t.Fatalf("负下载上限应报错：%v", err)
@@ -175,6 +201,87 @@ func TestNewClientBuildErrors(t *testing.T) {
 		VerifyPublicKey: []byte{1, 2, 3},
 	}); !errx.Is(err, core.CodeInvalidConfig) {
 		t.Fatalf("非法公钥应报错：%v", err)
+	}
+}
+
+// TestNormalizeManifestURL 覆盖根地址自动补路径规则。
+func TestNormalizeManifestURL(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"https://node.example.com:19091", "https://node.example.com:19091/updates/manifest.json"},
+		{"https://node.example.com:19091/", "https://node.example.com:19091/updates/manifest.json"},
+		{"https://node.example.com:19091/updates/manifest.json", "https://node.example.com:19091/updates/manifest.json"},
+		{"https://node.example.com:19091/custom.json", "https://node.example.com:19091/custom.json"},
+		{"https://node.example.com:19091?token=1", "https://node.example.com:19091/updates/manifest.json?token=1"},
+		{"://bad", "://bad"},
+	}
+	for _, c := range cases {
+		if got := normalizeManifestURL(c.in); got != c.want {
+			t.Fatalf("normalizeManifestURL(%q) = %q，期望 %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestSameOriginResolver 覆盖同源解析器正常与异常输入。
+func TestSameOriginResolver(t *testing.T) {
+	asset := core.Asset{URL: "https://update.invalid/updates/assets/app.bin"}
+	want := "https://node.example.com:19091/updates/assets/app.bin"
+	if got := SameOriginResolver("https://node.example.com:19091/updates/manifest.json", asset); got != want {
+		t.Fatalf("同源解析不符：%q", got)
+	}
+	if got := SameOriginResolver("://bad", asset); got != asset.URL {
+		t.Fatalf("非法清单地址应原样返回：%q", got)
+	}
+	if got := SameOriginResolver("https://node.example.com:19091/updates/manifest.json",
+		core.Asset{URL: "://bad"}); got != "://bad" {
+		t.Fatalf("非法资产地址应原样返回：%q", got)
+	}
+	if got := SameOriginResolver("", core.Asset{URL: "https://x/a"}); got != "https://x/a" {
+		t.Fatalf("空清单地址应原样返回：%q", got)
+	}
+}
+
+// TestRunRootURLWithSameOriginResolver 覆盖根地址入口 + 同源解析器闭环。
+func TestRunRootURLWithSameOriginResolver(t *testing.T) {
+	asset := []byte("新版本二进制内容")
+	srv, paths := newUpdatesManifestServer(t, "1.1.0", asset)
+	target := filepath.Join(t.TempDir(), "app")
+	_ = os.WriteFile(target, []byte("旧版本二进制内容"), 0o755)
+	c, err := NewClient(Config{
+		ManifestURL:      srv.URL, // 根地址，无路径自动补 /updates/manifest.json
+		CurrentVersion:   "1.0.0",
+		ExecutablePath:   target,
+		AfterUpdate:      AfterUpdateContinue,
+		AllowHTTP:        true,
+		AssetURLResolver: SameOriginResolver,
+	})
+	testx.RequireNoError(t, err)
+	res, err := c.Run(context.Background())
+	testx.RequireNoError(t, err)
+	testx.RequireEqual(t, res.Updated, true)
+	if res.RestartRequired {
+		testx.RequireNoError(t, core.Bootstrap(context.Background(), target))
+	}
+	data, _ := os.ReadFile(target)
+	testx.RequireEqual(t, string(data), string(asset))
+	got := *paths
+	testx.RequireEqual(t, got[0], "/updates/manifest.json")
+	testx.RequireEqual(t, got[len(got)-1], "/updates/assets/app.bin")
+}
+
+// TestRunResolverEmpty 覆盖解析结果为空分支。
+func TestRunResolverEmpty(t *testing.T) {
+	srv := newManifestServer(t, "1.1.0", []byte("新版本二进制内容"), "")
+	target := filepath.Join(t.TempDir(), "app")
+	_ = os.WriteFile(target, []byte("旧版本二进制内容"), 0o755)
+	cfg := baseConfig(srv, target, "1.0.0", AfterUpdateContinue)
+	cfg.AssetURLResolver = func(string, core.Asset) string { return "" }
+	c, err := NewClient(cfg)
+	testx.RequireNoError(t, err)
+	if _, err := c.Run(context.Background()); !errx.Is(err, core.CodeDownloadFailed) {
+		t.Fatalf("空解析结果应报下载失败，实际：%v", err)
 	}
 }
 

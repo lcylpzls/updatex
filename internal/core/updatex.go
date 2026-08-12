@@ -19,6 +19,8 @@ import (
 const (
 	defaultMaxDownload = 512 << 20 // 512 MiB
 	defaultHTTPTimeout = 30 * time.Second
+	// DefaultManifestURL 是服务端默认清单路由，客户端无路径入口时自动补全。
+	DefaultManifestURL = "/updates/manifest.json"
 )
 
 // replaceExec 可替换的替换函数（测试注入用）。
@@ -70,6 +72,9 @@ type Config struct {
 	VerifyPublicKey []byte
 	// TraceHook 链路追踪钩子（可选）。
 	TraceHook TraceHook
+	// AssetURLResolver 资产下载地址解析器（可选）。
+	// 在清单验签之后、下载之前调用；nil 时沿用 Asset.URL 原值。
+	AssetURLResolver func(asset Asset) string
 }
 
 // UpdateInfo 检查结果。
@@ -205,6 +210,15 @@ func (u *Updater) Apply(ctx context.Context) (info *UpdateInfo, err error) {
 	if err != nil {
 		u.metricUpdateFailure(err)
 		return nil, err
+	}
+	if u.cfg.AssetURLResolver != nil {
+		resolved := u.cfg.AssetURLResolver(asset)
+		if resolved == "" {
+			err := errx.New(errx.KindUnavailable, CodeDownloadFailed, "资产地址解析结果为空")
+			u.metricUpdateFailure(err)
+			return nil, err
+		}
+		asset.URL = resolved
 	}
 	if !u.cfg.AllowHTTP && !strings.HasPrefix(asset.URL, "https://") {
 		err := errx.New(errx.KindUnavailable, CodeDownloadFailed, "资产地址必须使用 HTTPS")

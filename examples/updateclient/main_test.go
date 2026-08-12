@@ -44,7 +44,7 @@ func TestRunHTTP3Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := Options{
-		ManifestURL:    "https://" + addr + "/updates/manifest.json",
+		ManifestURL:    "https://" + addr, // 根地址，自动补 /updates/manifest.json
 		CurrentVersion: "1.0.0",
 		Target:         target,
 		UseHTTP3:       true,

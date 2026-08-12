@@ -17,7 +17,7 @@ import (
 // 默认服务端路由与清单文件名。
 const (
 	defaultManifestFile = "manifest.json"
-	defaultManifestURL  = "/updates/manifest.json"
+	defaultManifestURL  = core.DefaultManifestURL
 	defaultAssetsURL    = "/updates/assets/"
 	defaultAdminPrefix  = "/updates/admin"
 )

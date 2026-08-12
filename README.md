@@ -4,7 +4,7 @@
 版本检查、下载校验、原子替换与更新后动作，与 errx / logx / httpx / webx
 生态打通。
 
-> 当前状态：**v1.4.0**。
+> 当前状态：**v1.4.1**。
 
 ## 定位
 
@@ -55,11 +55,13 @@ log.Fatal(ws.Start())
 
 ```go
 c, err := updatex.NewClient(updatex.ClientConfig{
-	ManifestURL:    "https://updates.example.com/updates/manifest.json",
+	ManifestURL:     "https://updates.example.com", // 根地址，自动补 /updates/manifest.json
 	CurrentVersion: "1.0.0",
 	AfterUpdate:    updatex.AfterUpdateExit, // 或 Continue / Restart
 	RestartCommand: "systemctl restart myapp", // AfterUpdate=Restart 时必填
 	Logger:         logger,
+	// 资产地址按“拉清单的这台服务器”解析，清单里可写占位 URL。
+	AssetURLResolver: updatex.SameOriginResolver,
 })
 if err != nil {
 	log.Fatal(err)
@@ -70,7 +72,9 @@ if _, err := c.Run(context.Background()); err != nil {
 ```
 
 `Run` 内部流程：Windows 启动时替换（Bootstrap）→ 拉取清单 → 版本检查 →
-有更新则下载校验替换 → 按 `AfterUpdate` 执行动作。
+有更新则**验签 → 解析资产地址 → 下载校验替换** → 按 `AfterUpdate` 执行动作。
+`ManifestURL` 填服务端根地址时自动补 `/updates/manifest.json`；
+`AssetURLResolver` 在验签之后生效，`nil` 时沿用清单里的 `asset.URL`。
 
 ## 目录
 

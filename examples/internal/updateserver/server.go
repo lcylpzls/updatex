@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/lcylpzls/logx"
@@ -37,9 +36,7 @@ type Config struct {
 // Server 包装 webx 与 updatex 服务端。
 type Server struct {
 	webx      *webx.Server
-	updater   *updatex.Server
 	assetsDir string
-	manifest  string
 }
 
 // NewServer 构造更新服务端：生成资产目录与清单文件，并注册到 webx。
@@ -63,7 +60,8 @@ func NewServer(cfg Config, certFile, keyFile, listen string, logger logx.Logger)
 		Notes:       cfg.Notes,
 		Platforms: map[string]updatex.Asset{
 			key: {
-				URL:    "https://HOST_PLACEHOLDER/updates/assets/app.bin",
+				// 占位主机：实际下载地址由客户端 SameOriginResolver 按清单 origin 解析。
+				URL:    "https://update.invalid/updates/assets/app.bin",
 				SHA256: hex.EncodeToString(sum[:]),
 				Size:   int64(len(cfg.Asset)),
 			},
@@ -106,23 +104,8 @@ func NewServer(cfg Config, certFile, keyFile, listen string, logger logx.Logger)
 	}
 	return &Server{
 		webx:      ws,
-		updater:   updater,
 		assetsDir: dir,
-		manifest:  filepath.Join(dir, "manifest.json"),
 	}, nil
-}
-
-// SetBaseURL 将清单中的资产地址替换为实际服务基地址并热更新清单。
-func (s *Server) SetBaseURL(base string) error {
-	data, err := os.ReadFile(s.manifest)
-	if err != nil {
-		return err
-	}
-	text := strings.ReplaceAll(string(data), "https://HOST_PLACEHOLDER", base)
-	if err := os.WriteFile(s.manifest, []byte(text), 0o600); err != nil {
-		return err
-	}
-	return s.updater.Reload()
 }
 
 // Start 启动服务（阻塞）。
@@ -152,9 +135,6 @@ func StartAndWait(ctx context.Context, cfg Config, certFile, keyFile, listen str
 	go func() { errCh <- s.Start() }()
 	for i := 0; i < 500; i++ {
 		if addr := s.ListenerAddr(); addr != "" {
-			if err := s.SetBaseURL("https://" + addr); err != nil {
-				return nil, "", err
-			}
 			return s, addr, nil
 		}
 		select {

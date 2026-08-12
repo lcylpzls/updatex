@@ -74,6 +74,12 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	return core.ParseManifest(data)
 }
 
+// SameOriginResolver 返回同源资产地址：manifestURL 的 origin + asset.URL 的 path。
+// manifestURL 或 asset.URL 无法解析时原样返回 asset.URL。
+func SameOriginResolver(manifestURL string, asset Asset) string {
+	return client.SameOriginResolver(manifestURL, asset)
+}
+
 // NewServer 创建自更新服务端实例；注册到 webx 前调用 RegisterWebx。
 func NewServer(assetsDir string, opts ...ServerOption) (*Server, error) {
 	return server.NewServer(assetsDir, opts...)

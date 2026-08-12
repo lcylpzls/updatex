@@ -22,6 +22,12 @@ func TestPublicAPI(t *testing.T) {
 	if _, err := updatex.ParseManifest([]byte("bad")); err == nil {
 		t.Fatal("非法清单应报错")
 	}
+	if got := updatex.SameOriginResolver(
+		"https://node.example.com:19091/updates/manifest.json",
+		updatex.Asset{URL: "https://update.invalid/updates/assets/app.bin"},
+	); got != "https://node.example.com:19091/updates/assets/app.bin" {
+		t.Fatalf("SameOriginResolver 不符：%q", got)
+	}
 
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(manifestBody), 0o600)

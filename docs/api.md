@@ -1,6 +1,6 @@
 # updatex API 定版
 
-> 版本：v1.4.0 · 已实现签名与代码一致。
+> 版本：v1.4.1 · 已实现签名与代码一致。
 
 ## 1. 包结构
 
@@ -71,6 +71,7 @@ type ClientConfig struct {
 	MaxDownloadBytes int64               // 默认 512 MiB
 	Metrics         Metrics              // 可选
 	TraceHook       TraceHook            // 可选
+	AssetURLResolver func(manifestURL string, asset Asset) string // 可选
 }
 
 type Result struct {
@@ -100,10 +101,22 @@ const (
 
 1. 先执行 Windows 启动时替换（Bootstrap），完成上次未完成的替换；
 2. 拉取清单并版本比较，无更新直接返回 `Result{Updated:false}`；
-3. 有更新则下载、SHA256 校验（可选 Ed25519 验签）、替换；
+3. 有更新则**验签（可选 Ed25519）→ 解析资产地址 → 下载、SHA256 校验、替换**；
 4. 按 `AfterUpdate` 执行：Continue 返回结果；Exit 直接退出；
    Restart 异步启动用户命令（Windows `cmd /C`，Unix `sh -c`），
    启动失败返回错误、进程不退出，成功后退出。
+
+`ManifestURL` 语义：填服务端根地址（无路径或仅 `/`）时自动补
+`/updates/manifest.json`；带自定义路径时按原值使用。
+
+`AssetURLResolver` 语义：入参为实际清单 URL 与资产，返回下载地址；
+在验签之后、HTTPS 校验与下载之前调用（保证签名载荷中的 `asset.URL`
+不被改写破坏）；`nil` 时沿用 `asset.URL` 原值。
+
+```go
+// 同源解析器：清单 origin + 资产 path，直接作为 AssetURLResolver 使用。
+func SameOriginResolver(manifestURL string, asset Asset) string
+```
 
 ## 4. 共享类型
 

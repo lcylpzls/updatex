@@ -5,6 +5,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -78,6 +79,9 @@ type Config struct {
 	Metrics core.Metrics
 	// TraceHook 链路追踪钩子（可选）。
 	TraceHook core.TraceHook
+	// AssetURLResolver 资产下载地址解析器（可选）。
+	// 入参为清单 URL 与资产，返回实际下载地址；nil 时沿用 asset.URL。
+	AssetURLResolver func(manifestURL string, asset core.Asset) string
 }
 
 // Client 自动更新客户端。
@@ -115,6 +119,7 @@ func NewClient(cfg Config) (*Client, error) {
 	if cfg.AfterUpdate == AfterUpdateRestart && strings.TrimSpace(cfg.RestartCommand) == "" {
 		return nil, errx.NewCode(core.CodeInvalidConfig, "重启动作必须提供 RestartCommand")
 	}
+	manifestURL := normalizeManifestURL(cfg.ManifestURL)
 
 	client := cfg.HTTPClient
 	if client == nil {
@@ -143,13 +148,19 @@ func NewClient(cfg Config) (*Client, error) {
 		case httpx.ProtocolHTTP3:
 			opts = append(opts, source.WithHTTP3(true))
 		}
-		httpSrc, err := source.NewHTTPSource(cfg.ManifestURL, cfg.AllowHTTP, opts...)
+		httpSrc, err := source.NewHTTPSource(manifestURL, cfg.AllowHTTP, opts...)
 		if err != nil {
 			return nil, err
 		}
 		src = httpSrc
 	}
 
+	var resolve func(asset core.Asset) string
+	if cfg.AssetURLResolver != nil {
+		resolve = func(asset core.Asset) string {
+			return cfg.AssetURLResolver(manifestURL, asset)
+		}
+	}
 	u, err := core.New(core.Config{
 		Source:           src,
 		CurrentVersion:   cfg.CurrentVersion,
@@ -161,11 +172,42 @@ func NewClient(cfg Config) (*Client, error) {
 		HTTPClient:       client,
 		VerifyPublicKey:  cfg.VerifyPublicKey,
 		TraceHook:        cfg.TraceHook,
+		AssetURLResolver: resolve,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &Client{updater: u, cfg: cfg}, nil
+}
+
+// normalizeManifestURL 规范化清单地址：无路径或仅 "/" 时自动补服务端默认路径。
+func normalizeManifestURL(raw string) string {
+	if raw == "" {
+		return raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	if u.Path == "" || u.Path == "/" {
+		u.Path = core.DefaultManifestURL
+	}
+	return u.String()
+}
+
+// SameOriginResolver 返回同源资产地址：manifestURL 的 origin + asset.URL 的 path。
+// manifestURL 或 asset.URL 无法解析时原样返回 asset.URL。
+func SameOriginResolver(manifestURL string, asset core.Asset) string {
+	m, err := url.Parse(manifestURL)
+	if err != nil || m.Scheme == "" || m.Host == "" {
+		return asset.URL
+	}
+	a, err := url.Parse(asset.URL)
+	if err != nil || a.Path == "" {
+		return asset.URL
+	}
+	m.Path = a.Path
+	return m.String()
 }
 
 // Run 执行完整更新闭环：Bootstrap → 检查 → 下载校验替换 → 更新后动作。

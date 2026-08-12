@@ -68,7 +68,7 @@ Check（拉取清单 → semver 比较 → 可选验签）
 返回 Result{Updated:false}
   │ 有更新
   ▼
-Apply（重新拉取清单 → 下载 → SHA256 流式校验 → 替换）
+Apply（重新拉取清单 → 验签 → 解析资产地址 → 下载 → SHA256 流式校验 → 替换）
   │ 失败 → 返回错误（业务继续启动，不阻塞）
   ▼
 按 AfterUpdate：
@@ -131,6 +131,15 @@ Apply（旧进程）
 - 配置公钥但清单无签名 → `ErrSignatureInvalid`；
 - 未配置公钥 → 跳过签名校验（文档明确降级风险）。
 
+### 6.5 资产地址解析
+
+- `AssetURLResolver` 在**验签之后、下载之前**调用，签名载荷中的
+  `asset.URL` 不被改写，多环境无需生成多份清单；
+- 默认 `nil` 时沿用 `asset.URL` 原值，行为与旧版一致；
+- 内置 `SameOriginResolver`：取清单 origin + 资产 path，
+  即“我拉清单的这台服务器”，适合私网/公网共用一份清单；
+- 解析后的地址仍受 HTTPS 强制校验约束（`AllowHTTP` 除外）。
+
 ### 6.3 TOCTOU 防护
 
 `Apply` 会重新拉取清单并比对目标版本，不依赖 `Check` 的缓存结果；
@@ -161,3 +170,5 @@ Apply（旧进程）
   `Restart`（如 `systemctl restart xxx`），Windows 服务用
   `Restart`（服务重启指令）或 `Exit`（由服务管理器拉起）；
 - confx：`ClientConfig` 结构体可直接作为 confx 目标。
+- 迁移说明：若调用方曾在 source 阶段改写资产 URL，应删除该改写，
+  改为配置 `updatex.SameOriginResolver`（否则启用签名后校验必然失败）。

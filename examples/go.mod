@@ -7,7 +7,7 @@ require (
 	github.com/lcylpzls/httpx v1.4.1
 	github.com/lcylpzls/logx v1.5.1
 	github.com/lcylpzls/testx v1.5.0
-	github.com/lcylpzls/updatex v1.4.0
+	github.com/lcylpzls/updatex v1.4.1
 	github.com/lcylpzls/webx v1.6.4
 )
 

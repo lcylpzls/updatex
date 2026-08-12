@@ -31,7 +31,7 @@ func main() {
 		clix.WithDescription("HTTP/3 一键升级客户端示例"),
 		clix.WithIO(os.Stdout, os.Stderr),
 		clix.WithGlobalFlags(
-			clix.StringFlag("manifest", "发布清单 URL").Required(),
+			clix.StringFlag("manifest", "服务端根地址（无路径自动补 /updates/manifest.json）").Required(),
 			clix.StringFlag("current", "当前版本").Default("1.0.0"),
 			clix.StringFlag("target", "目标可执行文件路径").Required(),
 			clix.BoolFlag("http3", "使用 HTTP/3 传输").Default(true),
@@ -107,15 +107,16 @@ func parseAfterUpdate(s string) (updatex.AfterUpdateAction, error) {
 // run 执行完整升级流程（测试与命令共用）。
 func run(ctx context.Context, opts Options, logger logx.Logger) (*updatex.Result, error) {
 	cfg := updatex.ClientConfig{
-		ManifestURL:     opts.ManifestURL,
-		CurrentVersion:  opts.CurrentVersion,
-		ExecutablePath:  opts.Target,
-		AllowHTTP:       opts.AllowHTTP,
-		Logger:          logger,
-		AfterUpdate:     opts.AfterUpdate,
-		RestartCommand:  opts.RestartCommand,
-		VerifyPublicKey: opts.VerifyPublicKey,
-		InsecureTLS:     opts.InsecureTLS,
+		ManifestURL:      opts.ManifestURL,
+		CurrentVersion:   opts.CurrentVersion,
+		ExecutablePath:   opts.Target,
+		AllowHTTP:        opts.AllowHTTP,
+		Logger:           logger,
+		AfterUpdate:      opts.AfterUpdate,
+		RestartCommand:   opts.RestartCommand,
+		VerifyPublicKey:  opts.VerifyPublicKey,
+		InsecureTLS:      opts.InsecureTLS,
+		AssetURLResolver: updatex.SameOriginResolver,
 	}
 	if opts.UseHTTP3 {
 		cfg.Protocol = updatex.ProtocolHTTP3

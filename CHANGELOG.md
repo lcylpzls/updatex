@@ -2,6 +2,30 @@
 
 
 
+## [v1.4.1] - 2026-08-12
+
+### 新增
+
+- `ClientConfig.AssetURLResolver`：资产下载地址解析器，入参为清单 URL
+  与资产，返回实际下载地址；`nil` 时沿用 `asset.URL` 原值（向后兼容）；
+- `updatex.SameOriginResolver`：同源解析助手（清单 origin + 资产 path），
+  适合私网/公网共用一份清单；
+- `ManifestURL` 语义扩展：填服务端根地址（无路径或仅 `/`）时自动补
+  `/updates/manifest.json`，带自定义路径的存量配置不受影响。
+
+### 变更
+
+- `Apply` 流程调整为“验签 → 解析资产地址 → HTTPS 校验 → 下载”：
+  保证 Ed25519 签名载荷（含 `asset.URL`）不被改写破坏；
+- 示例改为静态占位清单（`https://update.invalid/...`）+ 客户端
+  `SameOriginResolver`，删除服务端 `SetBaseURL` 清单重写，
+  签名从此兼容。
+
+### 质量
+
+- 根包与 internal/core、server、client、source 覆盖率均 100%；
+  race / vet / staticcheck / fuzz / govulncheck 全绿。
+
 ## [v1.4.0] - 2026-08-12
 
 ### 破坏性变更

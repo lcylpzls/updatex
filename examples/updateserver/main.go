@@ -51,9 +51,6 @@ func runServer(_ context.Context, c *clix.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := s.SetBaseURL("https://" + c.GlobalString("listen")); err != nil {
-		return err
-	}
 	logger.Info("updateserver：HTTP/3 升级服务启动", logx.Fields(logx.String("地址", c.GlobalString("listen"))))
 	return s.Start()
 }
