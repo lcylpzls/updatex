@@ -1,5 +1,5 @@
-// updateserver 示例：基于 webx 的 HTTP/3 升级服务端。
-// 提供 /update.json（发布清单）与 /download（升级资产）。
+// updateserver 示例：基于 webx + updatex 的 HTTP/3 升级服务端。
+// 提供 /updates/manifest.json 清单与 /updates/assets/ 升级资产。
 package main
 
 import (
@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	app, err := clix.New("updateserver", "0.7.0",
+	app, err := clix.New("updateserver", "0.8.0",
 		clix.WithDescription("HTTP/3 升级服务端示例"),
 		clix.WithIO(os.Stdout, os.Stderr),
 		clix.WithGlobalFlags(
@@ -22,6 +22,7 @@ func main() {
 			clix.StringFlag("version", "发布版本（语义化版本）").Default("1.1.0"),
 			clix.StringFlag("notes", "变更说明").Default("HTTP/3 示例更新"),
 			clix.StringFlag("asset", "升级资产文件路径").Required(),
+			clix.StringFlag("admin-token", "管理路由令牌（可选）").Default(""),
 		),
 		clix.WithRootAction(runServer),
 	)
@@ -42,11 +43,15 @@ func runServer(_ context.Context, c *clix.Context) error {
 		return err
 	}
 	s, err := updateserver.NewServer(updateserver.Config{
-		Version: c.GlobalString("version"),
-		Notes:   c.GlobalString("notes"),
-		Asset:   data,
+		Version:    c.GlobalString("version"),
+		Notes:      c.GlobalString("notes"),
+		Asset:      data,
+		AdminToken: c.GlobalString("admin-token"),
 	}, c.GlobalString("cert"), c.GlobalString("key"), c.GlobalString("listen"), logger)
 	if err != nil {
+		return err
+	}
+	if err := s.SetBaseURL("https://" + c.GlobalString("listen")); err != nil {
 		return err
 	}
 	logger.Info("updateserver：HTTP/3 升级服务启动", logx.Fields(logx.String("地址", c.GlobalString("listen"))))

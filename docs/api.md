@@ -1,43 +1,127 @@
 # updatex API 定版
 
-> 版本：v1.3.0 · 已实现签名与代码一致。
+> 版本：v1.4.0 · 已实现签名与代码一致。
 
 ## 1. 包结构
 
 ```go
-updatex          // 根包：Check/Apply/Bootstrap/Config/UpdateInfo/错误
-updatex/source   // VersionSource 接口 + HTTP/GitHub 实现
+updatex          // 公开门面：NewServer / NewClient + 类型与错误码
+updatex/internal/core    // 共享引擎（不可导入）
+updatex/internal/server  // 服务端实现（不可导入）
+updatex/internal/client  // 客户端实现（不可导入）
+updatex/internal/source  // HTTP 清单源（不可导入）
 ```
 
-## 2. 核心类型
+根包是唯一对外入口，用户只 import `github.com/lcylpzls/updatex`。
 
-### 2.1 Config
+## 2. 服务端 API
 
 ```go
-type Config struct {
-	Source           VersionSource
-	CurrentVersion   string
-	ExecutablePath   string
-	VerifyPublicKey  []byte
-	MaxDownloadBytes int64
-	AllowHTTP        bool
-	Logger           logx.Logger
-	Metrics          Metrics
-	HTTPClient       *httpx.Client
-}
+func NewServer(assetsDir string, opts ...ServerOption) (*Server, error)
+func WithAdminToken(token string) ServerOption   // 为空不挂载管理路由
+func WithManifestPath(path string) ServerOption  // 默认 assetsDir/manifest.json
+func WithManifestURL(path string) ServerOption   // 默认 /updates/manifest.json
+func WithAssetsURL(path string) ServerOption     // 默认 /updates/assets/
 
+type Server struct{ /* 不可直接构造 */ }
+func (s *Server) Reload() error                                  // 热更新清单
+func (s *Server) HandleAdmin(method, pattern string, h webx.HandlerFunc) error
+func (s *Server) RegisterWebx(ws *webx.Server) error             // 必须在 webx.Start 前调用
 ```
 
-### 2.2 UpdateInfo / Asset
+语义：
+
+- `NewServer`：校验资产目录并解析清单，失败返回对应 errx 错误码；
+- `Reload`：重新读取清单文件并热更新，无需重新注册路由；
+- `HandleAdmin`：仅配置 `WithAdminToken` 后可调用，`method` 支持
+  GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS，注册的路由统一挂到
+  `/updates/admin` 分组并强制 `X-Api-Token` 鉴权（常量时间比较）；
+- `RegisterWebx`：注册清单路由、资产静态服务与管理分组；
+  可对多个 webx 实例重复调用。
+
+默认路由：
+
+| 路由 | 方法 | 说明 |
+| --- | --- | --- |
+| `/updates/manifest.json` | GET | 发布清单（Reload 后即时生效） |
+| `/updates/assets/` | GET/HEAD | 资产静态服务（路径穿越防护） |
+| `/updates/admin/status` | GET | 管理状态，需 `X-Api-Token` |
+
+## 3. 客户端 API
 
 ```go
-type UpdateInfo struct {
-	HasUpdate  bool
-	Version    string
-	Notes      string
-	Asset      Asset
-	RestartRequired bool // Windows 延迟替换时为 true
+func NewClient(cfg ClientConfig) (*Client, error)
+
+type Client struct{ /* 不可直接构造 */ }
+func (c *Client) Run(ctx context.Context) (*Result, error)
+
+type ClientConfig struct {
+	ManifestURL     string               // 与 Source 二选一
+	Source          VersionSource        // 与 ManifestURL 二选一
+	CurrentVersion  string               // 必填
+	ExecutablePath  string               // 默认 os.Executable
+	AfterUpdate     AfterUpdateAction    // 必填
+	RestartCommand  string               // AfterUpdate=Restart 时必填
+	VerifyPublicKey []byte               // 可选，Ed25519 公钥
+	AllowHTTP       bool                 // 默认 false，仅测试/内网
+	Logger          logx.Logger          // 可选
+	Protocol        Protocol             // 默认 ProtocolAuto
+	InsecureTLS     bool                 // 默认 false，仅测试
+	HTTPClient      *httpx.Client        // 可选
+	MaxDownloadBytes int64               // 默认 512 MiB
+	Metrics         Metrics              // 可选
+	TraceHook       TraceHook            // 可选
 }
+
+type Result struct {
+	Updated         bool
+	Version         string
+	RestartRequired bool   // Windows 延迟替换时为 true
+	Notes           string
+}
+
+type AfterUpdateAction int
+const (
+	AfterUpdateContinue AfterUpdateAction = iota // 继续运行，返回结果
+	AfterUpdateExit                              // 更新成功后 os.Exit(0)
+	AfterUpdateRestart                           // 异步启动命令后 os.Exit(0)
+)
+
+type Protocol = httpx.Protocol
+const (
+	ProtocolAuto  = httpx.ProtocolAuto  // HTTP/1.1 + HTTP/2（ALPN）
+	ProtocolHTTP1 = httpx.ProtocolHTTP1
+	ProtocolHTTP2 = httpx.ProtocolHTTP2
+	ProtocolHTTP3 = httpx.ProtocolHTTP3 // 传输注册由包内部完成
+)
+```
+
+`Run` 语义：
+
+1. 先执行 Windows 启动时替换（Bootstrap），完成上次未完成的替换；
+2. 拉取清单并版本比较，无更新直接返回 `Result{Updated:false}`；
+3. 有更新则下载、SHA256 校验（可选 Ed25519 验签）、替换；
+4. 按 `AfterUpdate` 执行：Continue 返回结果；Exit 直接退出；
+   Restart 异步启动用户命令（Windows `cmd /C`，Unix `sh -c`），
+   启动失败返回错误、进程不退出，成功后退出。
+
+## 4. 共享类型
+
+```go
+type VersionSource interface {
+	Latest(ctx context.Context) (*Manifest, error)
+}
+
+type Manifest struct {
+	Version     string
+	PublishedAt time.Time
+	Notes       string
+	Platforms   map[string]Asset // 键为 GOOS_GOARCH
+	Signature   string
+}
+func ParseManifest(data []byte) (*Manifest, error)
+func (m *Manifest) AssetFor(goos, goarch string) (Asset, error)
+func (m *Manifest) VerifySignature(publicKey []byte) error
 
 type Asset struct {
 	URL    string
@@ -46,109 +130,58 @@ type Asset struct {
 }
 ```
 
-### 2.3 VersionSource
-
-```go
-type VersionSource interface {
-	// Latest 返回当前平台可用的最新发布清单（原始字节 + 版本）。
-	Latest(ctx context.Context) (*Manifest, error)
-}
-```
-
-### 2.4 Manifest（导出，供自定义源实现）
-
-```go
-type Manifest struct {
-	Version     string
-	PublishedAt time.Time
-	Notes       string
-	Platforms   map[string]Asset
-	Signature   string
-}
-
-func ParseManifest(data []byte) (*Manifest, error)
-func (m *Manifest) AssetFor(goos, goarch string) (Asset, error)
-func (m *Manifest) VerifySignature(publicKey []byte) error
-```
-
-## 3. 根包函数
-
-```go
-func New(cfg Config) (*Updater, error)
-func (u *Updater) Check(ctx context.Context) (*UpdateInfo, error)
-func (u *Updater) Apply(ctx context.Context) (*UpdateInfo, error)
-func (u *Updater) ApplyAndRestart(ctx context.Context, restart func() error) (*UpdateInfo, error)
-func Bootstrap(ctx context.Context, executablePath string) error
-```
-
-语义：
-
-- `New`：配置校验失败返回 `ErrInvalidConfig`；
-- `Check`：仅拉取与比较，不下载；
-- `Apply`：自包含完整流程（重新拉取 → 比较 → 下载 → 校验 → 替换），
-  不依赖 `Check` 前置；`RestartRequired=true` 时由业务重启；
-- `ApplyAndRestart`：Apply 后若需重启则调用 `restart`（非阻塞，
-  由业务决定延迟退出）；
-- `Bootstrap`：处理 Windows `.pending` 标记；Unix 恒返回 nil。
-
-## 4. source 子包
-
-```go
-// HTTP 清单源（v0.1.0）：默认基于 httpx（支持 HTTP/1/2/3）
-func NewHTTPSource(url string, allowHTTP bool, opts ...HTTPSourceOption) (*HTTPSource, error)
-func WithHTTP3(enable bool) HTTPSourceOption   // 切换 HTTP/3 传输
-func WithHTTP2(enable bool) HTTPSourceOption   // 切换 HTTP/2 传输
-func WithHTTPClient(client httpClient) HTTPSourceOption    // 注入自定义客户端（*httpx.Client 可直接传入）
-
-// GitHub Releases 源
-func NewGitHubSource(repo string, opts ...GitHubOption) (*GitHubSource, error)
-func WithGitHubToken(token string) GitHubOption
-func WithGitHubClient(client httpClient) GitHubOption
-```
-
-GitHub 资产命名约定：`<名称>_<GOOS>_<GOARCH>[.扩展名]`；
-校验和文件约定：`<资产名>.sha256` 或 `<去扩展名>.sha256`
-（内容为 64 位十六进制，可带文件名后缀）。
-
-### 5.1 签名语义
-
-- 签名载荷为 `Signature` 置空后的规范化 JSON（字段顺序与
-  map 排序由 `encoding/json` 保证）；
-- 配置公钥但清单无签名 → `ErrSignatureInvalid`；
-- 未配置公钥 → 跳过签名校验（文档明确降级风险）。
-
 ## 5. 错误值清单
 
 ```go
+const (
+	CodeInvalidConfig       = "updatex_invalid_config"
+	CodeInvalidVersion      = "updatex_invalid_version"
+	CodeManifestInvalid     = "updatex_manifest_invalid"
+	CodeFetchFailed         = "updatex_fetch_failed"
+	CodeDownloadFailed      = "updatex_download_failed"
+	CodeChecksumMismatch    = "updatex_checksum_mismatch"
+	CodeSignatureInvalid    = "updatex_signature_invalid"
+	CodeDowngrade           = "updatex_downgrade"
+	CodePlatformUnsupported = "updatex_platform_unsupported"
+	CodeReplaceFailed       = "updatex_replace_failed"
+	CodeRollbackFailed      = "updatex_rollback_failed"
+)
+
 var (
-	ErrInvalidConfig      = errx.New(errx.KindInvalid, CodeInvalidConfig, "配置非法")
-	ErrInvalidVersion     = errx.New(errx.KindInvalid, CodeInvalidVersion, "版本号非法")
-	ErrManifestInvalid    = errx.New(errx.KindInvalid, CodeManifestInvalid, "发布清单非法")
-	ErrFetchFailed        = errx.New(errx.KindUnavailable, CodeFetchFailed, "拉取发布清单失败")
-	ErrDownloadFailed     = errx.New(errx.KindUnavailable, CodeDownloadFailed, "下载更新资产失败")
-	ErrChecksumMismatch   = errx.New(errx.KindDataLoss, CodeChecksumMismatch, "SHA256 校验失败")
-	ErrSignatureInvalid   = errx.New(errx.KindForbidden, CodeSignatureInvalid, "签名无效")
-	ErrDowngrade          = errx.New(errx.KindConflict, CodeDowngrade, "拒绝版本回退")
-	ErrPlatformUnsupported = errx.New(errx.KindNotFound, CodePlatformUnsupported, "当前平台无可用资产")
-	ErrReplaceFailed      = errx.New(errx.KindUnavailable, CodeReplaceFailed, "替换可执行文件失败")
-	ErrRollbackFailed     = errx.New(errx.KindUnavailable, CodeRollbackFailed, "回滚失败")
+	ErrInvalidConfig       = ...
+	ErrInvalidVersion      = ...
+	ErrManifestInvalid     = ...
+	ErrFetchFailed         = ...
+	ErrDownloadFailed      = ...
+	ErrChecksumMismatch    = ...
+	ErrSignatureInvalid    = ...
+	ErrDowngrade           = ...
+	ErrPlatformUnsupported = ...
+	ErrReplaceFailed       = ...
+	ErrRollbackFailed      = ...
 )
 ```
 
 ## 6. 完整示例
 
 ```go
-src := source.NewHTTPSource("https://cdn.example.com/update.json", false)
-u, err := updatex.New(updatex.Config{
-	Source:         src,
-	CurrentVersion: "1.0.0",
+// 服务端
+s, _ := updatex.NewServer("./assets", updatex.WithAdminToken("令牌"))
+s.HandleAdmin("POST", "/reload", func(c *webx.Context) {
+	_ = s.Reload()
+	c.JSON(http.StatusOK, map[string]bool{"ok": true})
 })
+_ = s.RegisterWebx(ws)
 
-info, err := u.Check(ctx)
-if info.HasUpdate {
-	_, err = u.ApplyAndRestart(ctx, func() error {
-		// 业务重启逻辑（如退出并交由守护进程拉起）。
-		return nil
-	})
+// 客户端（main 最前）
+c, _ := updatex.NewClient(updatex.ClientConfig{
+	ManifestURL:    "https://updates.example.com/updates/manifest.json",
+	CurrentVersion: "1.0.0",
+	AfterUpdate:    updatex.AfterUpdateContinue,
+	Logger:         logger,
+})
+res, err := c.Run(ctx)
+if err == nil && res.Updated {
+	os.Exit(0) // 由业务决定重启时机
 }
 ```

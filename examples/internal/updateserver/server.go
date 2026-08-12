@@ -1,4 +1,4 @@
-// Package updateserver 提供基于 webx 的 HTTP/3 升级服务端库代码，
+// Package updateserver 提供基于 webx + updatex 的 HTTP/3 升级服务端示例库，
 // 供命令与端到端测试共用。
 package updateserver
 
@@ -6,9 +6,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/lcylpzls/logx"
@@ -26,62 +30,120 @@ type Config struct {
 	Asset []byte
 	// OnRequest 每个请求回调（协议验证用，可为 nil）。
 	OnRequest func(proto string)
+	// AdminToken 管理路由令牌（可选）。
+	AdminToken string
 }
 
-// NewServer 构造未启动的 webx HTTP/3 升级服务。
-func NewServer(cfg Config, certFile, keyFile, listen string, logger logx.Logger) (*webx.Server, error) {
+// Server 包装 webx 与 updatex 服务端。
+type Server struct {
+	webx      *webx.Server
+	updater   *updatex.Server
+	assetsDir string
+	manifest  string
+}
+
+// NewServer 构造更新服务端：生成资产目录与清单文件，并注册到 webx。
+func NewServer(cfg Config, certFile, keyFile, listen string, logger logx.Logger) (*Server, error) {
 	if cfg.Version == "" || len(cfg.Asset) == 0 {
 		return nil, errors.New("版本与资产不能为空")
 	}
+	dir, err := os.MkdirTemp("", "updatex-server-*")
+	if err != nil {
+		return nil, err
+	}
+	fail := func(err error) (*Server, error) {
+		_ = os.RemoveAll(dir)
+		return nil, err
+	}
 	sum := sha256.Sum256(cfg.Asset)
-	shaHex := hex.EncodeToString(sum[:])
 	key := runtime.GOOS + "_" + runtime.GOARCH
-	s := webx.NewServer(webx.Config{
+	manifest := updatex.Manifest{
+		Version:     cfg.Version,
+		PublishedAt: time.Now().UTC(),
+		Notes:       cfg.Notes,
+		Platforms: map[string]updatex.Asset{
+			key: {
+				URL:    "https://HOST_PLACEHOLDER/updates/assets/app.bin",
+				SHA256: hex.EncodeToString(sum[:]),
+				Size:   int64(len(cfg.Asset)),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o600); err != nil {
+		return fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "app.bin"), cfg.Asset, 0o600); err != nil {
+		return fail(err)
+	}
+	opts := []updatex.ServerOption{}
+	if cfg.AdminToken != "" {
+		opts = append(opts, updatex.WithAdminToken(cfg.AdminToken))
+	}
+	updater, err := updatex.NewServer(dir, opts...)
+	if err != nil {
+		return fail(err)
+	}
+	ws := webx.NewServer(webx.Config{
 		TLSCertFile:     certFile,
 		TLSKeyFile:      keyFile,
 		ShutdownTimeout: 5 * time.Second,
 	}, logger)
-	s.UseHttp3Listen(listen)
-	s.RegisterRoutes([]webx.Route{
-		{
-			Method: http.MethodGet,
-			Path:   "/update.json",
-			Handler: func(c *webx.Context) {
-				if cfg.OnRequest != nil {
-					cfg.OnRequest(c.Request().Proto)
-				}
-				m := &updatex.Manifest{
-					Version:     cfg.Version,
-					Notes:       cfg.Notes,
-					PublishedAt: time.Now().UTC(),
-					Platforms: map[string]updatex.Asset{
-						key: {
-							URL:    "https://" + c.Request().Host + "/download",
-							SHA256: shaHex,
-							Size:   int64(len(cfg.Asset)),
-						},
-					},
-				}
-				_ = c.JSON(http.StatusOK, m)
-			},
-		},
-		{
-			Method: http.MethodGet,
-			Path:   "/download",
-			Handler: func(c *webx.Context) {
-				if cfg.OnRequest != nil {
-					cfg.OnRequest(c.Request().Proto)
-				}
-				c.SetHeaderCanonical("Content-Type", "application/octet-stream")
-				_, _ = c.Writer().Write(cfg.Asset)
-			},
-		},
-	})
-	return s, nil
+	ws.UseHttp3Listen(listen)
+	if cfg.OnRequest != nil {
+		ws.UseGlobalMiddleware(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				cfg.OnRequest(r.Proto)
+				next.ServeHTTP(w, r)
+			})
+		})
+	}
+	if err := updater.RegisterWebx(ws); err != nil {
+		return fail(err)
+	}
+	return &Server{
+		webx:      ws,
+		updater:   updater,
+		assetsDir: dir,
+		manifest:  filepath.Join(dir, "manifest.json"),
+	}, nil
+}
+
+// SetBaseURL 将清单中的资产地址替换为实际服务基地址并热更新清单。
+func (s *Server) SetBaseURL(base string) error {
+	data, err := os.ReadFile(s.manifest)
+	if err != nil {
+		return err
+	}
+	text := strings.ReplaceAll(string(data), "https://HOST_PLACEHOLDER", base)
+	if err := os.WriteFile(s.manifest, []byte(text), 0o600); err != nil {
+		return err
+	}
+	return s.updater.Reload()
+}
+
+// Start 启动服务（阻塞）。
+func (s *Server) Start() error {
+	return s.webx.Start()
+}
+
+// Stop 优雅关闭服务并清理临时资产目录。
+func (s *Server) Stop(ctx context.Context) error {
+	err := s.webx.Stop(ctx)
+	_ = os.RemoveAll(s.assetsDir)
+	return err
+}
+
+// ListenerAddr 返回监听地址（port 0 动态端口时可用）。
+func (s *Server) ListenerAddr() string {
+	return s.webx.ListenerAddr()
 }
 
 // StartAndWait 启动服务并等待监听就绪，返回服务实例与监听地址。
-func StartAndWait(ctx context.Context, cfg Config, certFile, keyFile, listen string, logger logx.Logger) (*webx.Server, string, error) {
+func StartAndWait(ctx context.Context, cfg Config, certFile, keyFile, listen string, logger logx.Logger) (*Server, string, error) {
 	s, err := NewServer(cfg, certFile, keyFile, listen, logger)
 	if err != nil {
 		return nil, "", err
@@ -90,6 +152,9 @@ func StartAndWait(ctx context.Context, cfg Config, certFile, keyFile, listen str
 	go func() { errCh <- s.Start() }()
 	for i := 0; i < 500; i++ {
 		if addr := s.ListenerAddr(); addr != "" {
+			if err := s.SetBaseURL("https://" + addr); err != nil {
+				return nil, "", err
+			}
 			return s, addr, nil
 		}
 		select {

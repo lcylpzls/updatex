@@ -9,7 +9,7 @@ import (
 
 	"github.com/lcylpzls/httpx"
 	_ "github.com/lcylpzls/httpx/http3" // 注册 HTTP/3 传输
-	"github.com/lcylpzls/updatex"
+	"github.com/lcylpzls/updatex/internal/core"
 )
 
 // protocol 传输协议选择。
@@ -41,12 +41,12 @@ var newDefaultClient = func(p protocol) (httpClient, error) {
 // NewHTTPSource 构造 HTTP 清单源。
 func NewHTTPSource(url string, allowHTTP bool, opts ...HTTPSourceOption) (*HTTPSource, error) {
 	if url == "" {
-		return nil, updatex.ErrInvalidConfig
+		return nil, core.ErrInvalidConfig
 	}
 	if !allowHTTP && !strings.HasPrefix(url, "https://") {
-		return nil, updatex.ErrInvalidConfig
+		return nil, core.ErrInvalidConfig
 	}
-	s := &HTTPSource{url: url, allowHTTP: allowHTTP, protocol: protocolAuto}
+	s := &HTTPSource{url: url, protocol: protocolAuto}
 	for _, opt := range opts {
 		if err := opt(s); err != nil {
 			return nil, err
@@ -66,10 +66,10 @@ func NewHTTPSource(url string, allowHTTP bool, opts ...HTTPSourceOption) (*HTTPS
 func readLimited(r io.Reader, limit int64) ([]byte, error) {
 	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
-		return nil, updatex.ErrFetchFailed
+		return nil, core.ErrFetchFailed
 	}
 	if int64(len(data)) > limit {
-		return nil, updatex.ErrFetchFailed
+		return nil, core.ErrFetchFailed
 	}
 	return data, nil
 }

@@ -2,6 +2,48 @@
 
 
 
+## [v1.4.0] - 2026-08-12
+
+### 破坏性变更
+
+- 公开面重构为工厂门面：根包只暴露 `NewServer` / `NewClient`，
+  实现主体移入 `internal/server` 与 `internal/client`；
+- 服务端不再自建 HTTP 服务器与 mux：
+  - 新增 `Server.RegisterWebx(ws *webx.Server) error`，把清单、
+    资产静态服务与管理路由注册进调用方的 webx 实例；
+  - `HandleAdmin` 改为 webx 原生形态
+    `HandleAdmin(method, pattern string, h webx.HandlerFunc) error`；
+  - 删除 `Handler()`、`RegisterTo()`、`Use()`、`Middleware` 与
+    标准库形态的 `HandleAdmin`；
+- 客户端删除裸 API（`New` / `Check` / `Apply` / `ApplyAndRestart` /
+  `Bootstrap` / `Updater` / `Config` / `UpdateInfo`），统一由
+  `NewClient` + `Client.Run` 提供一键闭环；
+- 发布源收敛为单一自建通道：公开 `updatex/source` 子包与
+  `GitHubSource` 删除，`HTTPSource` 移入 `internal/source`；
+- 新增 `updatex.ClientConfig.Source`（`VersionSource` 接口）支持
+  自定义源注入。
+
+### 新增
+
+- 客户端 `AfterUpdateAction`：`AfterUpdateContinue`（继续运行）/
+  `AfterUpdateExit`（退出进程）/ `AfterUpdateRestart`（异步执行
+  用户命令后退出，Windows `cmd /C`，Unix `sh -c`）；
+- `Result{Updated, Version, RestartRequired, Notes}` 返回语义；
+- 客户端内置 Windows Bootstrap 闭环：新进程启动时自动完成上次
+  未完成的延迟替换。
+
+### 依赖
+
+- 新增 `webx v1.6.4`（webx 不依赖 updatex，无循环依赖）；
+- httpx / logx / cryptox / errx / validx / testx / tracex 等
+  家族依赖升级至最新版。
+
+### 质量
+
+- 根包与 internal/core、server、client、source 覆盖率均 100%；
+  race / vet / staticcheck / fuzz / govulncheck 全绿；
+- 示例改用新门面 API，HTTP/3 端到端升级闭环验证通过。
+
 ## [v1.3.0] - 2026-08-12
 
 ### 新增

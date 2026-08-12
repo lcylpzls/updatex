@@ -59,7 +59,7 @@ func TestHTTP3UpdateServer(t *testing.T) {
 
 	base := "https://" + addr
 
-	resp, err := client.Get(ctx, base+"/update.json")
+	resp, err := client.Get(ctx, base+"/updates/manifest.json")
 	testx.RequireNoError(t, err)
 
 	defer resp.Body.Close()
@@ -77,7 +77,7 @@ func TestHTTP3UpdateServer(t *testing.T) {
 		t.Fatalf("清单内容不符：%+v", m)
 	}
 
-	resp2, err := client.Get(ctx, base+"/download")
+	resp2, err := client.Get(ctx, base+"/updates/assets/app.bin")
 	testx.RequireNoError(t, err)
 
 	defer resp2.Body.Close()

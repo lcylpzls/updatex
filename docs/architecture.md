@@ -6,72 +6,88 @@
 
 ```
 updatex/
-├── updatex.go          # 根包：Check/Apply/Bootstrap/Config/错误
-├── version.go          # 轻量 semver 解析与比较
-├── manifest.go         # 清单结构、解析与平台选择
-├── verify.go           # SHA256 流式校验
-├── replace_unix.go     # Unix 原子替换（build tag）
-├── replace_windows.go  # Windows 启动时替换（build tag）
-├── source/
-│   ├── source.go       # VersionSource 接口
-│   ├── http_impl.go    # HTTP 清单源（httpx 客户端）
-  │   └── github.go       # GitHub Releases 源（v0.3.0 已落地）
-└── updatex_test.go     # 根包测试（注入 httptest 源）
+├── updatex.go          # 公开门面：NewServer / NewClient + 类型与错误码
+├── internal/
+│   ├── core/           # 共享引擎（零 webx）：Manifest/Asset/ParseManifest、
+│   │                   #   semver、SHA256/Ed25519 校验、替换、Updater、错误码
+│   ├── server/         # 服务端：Server/NewServer/Reload/HandleAdmin/RegisterWebx
+│   ├── client/         # 客户端：Client/NewClient/Run/AfterUpdateAction
+│   └── source/         # HTTP 清单源（唯一通道，基于 httpx）
+├── examples/
+│   ├── updateserver/   # webx HTTP/3 升级服务端示例
+│   └── updateclient/   # 一键升级客户端示例
+└── docs/
 ```
+
+依赖方向：`updatex` → `internal/server` / `internal/client` →
+`internal/core`；`internal/client` → `internal/source` → `internal/core`。
+`internal/core` 不依赖 webx；`internal/server` 是唯一依赖 webx 的包。
+全库无循环依赖。
 
 ## 2. 组件关系
 
 ```
 业务程序
-  │ Check / Apply / Bootstrap / ApplyAndRestart
-  ▼
-updatex 根包（编排）
-  ├── source.VersionSource   拉取清单（HTTP / GitHub）
-  ├── manifest               解析与平台选择
-  ├── version                semver 比较
-  ├── verify                 校验和 / 签名
-  └── replacer               平台替换（unix / windows）
+  │ NewServer / RegisterWebx（服务端）        NewClient / Run（客户端）
+  ▼                                            ▼
+internal/server（webx 适配）             internal/client（一键闭环）
+  │ 清单路由 / 资产静态 / 管理路由              │ Bootstrap → Check → Apply → 动作
+  ▼                                            ▼
+internal/core（共享引擎）                 internal/source（HTTP 清单源）
+  │ Manifest / semver / verify / replace        │ httpx 客户端（支持 HTTP/1/2/3）
+  └──────────────┬──────────────────────────────┘
+                 ▼
+           errx / logx / cryptox / validx / tracex-contract
 ```
 
-根包只做编排，各子组件单一职责、可独立测试。
+## 3. 服务端设计
 
-## 3. 状态机（Check → Apply）
+`NewServer(assetsDir, opts...)` 只做配置与清单加载，不持有任何 HTTP 服务器。
+`RegisterWebx(ws)` 在 `webx.Start()` 之前把能力注册进调用方的 webx 实例：
+
+1. 清单路由：`GET <manifestURL>`，处理器每次读取当前清单快照，
+   `Reload()` 后即时生效，无需重新注册；
+2. 资产静态服务：`ServeStaticDirWithOptions` 挂到 `<assetsURL>`，
+   由 webx 路由器提供 GET/HEAD 与路径穿越防护；
+3. 管理分组：`/updates/admin`，`tokenGuard`（`X-Api-Token` 常量时间比较）
+   作为分组中间件，内置 `/status`，`HandleAdmin` 注册的自定义路由
+   全部走同一鉴权。
+
+`HandleAdmin(method, pattern, h)` 在注册前校验方法、路径与令牌配置，
+失败返回 `CodeInvalidConfig`，避免把错误拖到请求期。
+
+## 4. 客户端状态机（Run）
 
 ```
-Idle
-  │ Check(ctx)
+开始
+  │ Bootstrap(ctx)   ← Windows：完成上次未完成的延迟替换（Unix 无操作）
   ▼
-Fetched ── 拉取失败 ──► Failed(fetch)
-  │ 版本比较
+Check（拉取清单 → semver 比较 → 可选验签）
+  │ 无更新
   ▼
-Compared ── 无更新 ──► UpToDate（HasUpdate=false）
+返回 Result{Updated:false}
   │ 有更新
   ▼
-Downloaded ── 下载/校验失败 ──► Failed(download|checksum|signature)
-  │ 替换
+Apply（重新拉取清单 → 下载 → SHA256 流式校验 → 替换）
+  │ 失败 → 返回错误（业务继续启动，不阻塞）
   ▼
-Replaced ── unix ──► Done（可立即重启）
-  │ windows
-  ▼
-RestartRequired ── 业务重启 ──► 新进程 Bootstrap ──► Done
+按 AfterUpdate：
+  ├─ Continue → 返回 Result{Updated:true}
+  ├─ Exit     → 记录日志 → os.Exit(0)
+  └─ Restart  → 异步启动 RestartCommand（cmd /C 或 sh -c）
+                 启动失败返回错误不退出；成功 → os.Exit(0)
 ```
 
-> `Apply` 是自包含流程（重新拉取清单），`Check` 仅作为预览；
-> 状态机以 `Apply` 为完整路径。
+## 5. 平台时序
 
-每个阶段失败都带 `stage` 上下文（fetch/download/verify/replace），
-日志与 Metrics 可定位。
-
-## 4. 关键时序
-
-### 4.1 正常检查（Unix）
+### 5.1 正常检查（Unix）
 
 ```
 Check
- 1. source.Latest(ctx)                 GET manifest.json（HTTPS）
- 2. manifest.Parse(bytes)              版本、平台资产、签名
- 3. semver.Compare(latest, current)    降级防护
- 4. 返回 UpdateInfo{HasUpdate:true, Version, Asset}
+ 1. HTTPSource.Latest(ctx)          GET manifest.json（HTTPS）
+ 2. ParseManifest(bytes)            版本、平台资产、可选签名
+ 3. semver.Compare(latest, current) 降级防护
+ 4. 返回 HasUpdate 与目标版本
 
 Apply
  1. 重新拉取清单（TOCTOU 防护）并比对版本
@@ -81,54 +97,52 @@ Apply
  5. 删除 .bak；失败时恢复 .bak
 ```
 
-### 4.2 Windows 启动时替换
+### 5.2 Windows 启动时替换
 
 ```
 Apply（旧进程）
  1-3 同上（下载校验到 目标.new）
  4. 写 目标.pending 标记（内容 = 目标版本）
- 5. 返回 RestartRequired
+ 5. 返回 RestartRequired=true
 
-Bootstrap（新进程，main 最前调用）
- 1. 读 .pending：不存在 → 直接返回
- 2. 校验 .new 存在与大小
- 3. rename(目标, .old) → rename(.new, 目标)
- 4. 删除 .pending 与 .old
- 5. 失败：保留 .pending（下次启动重试），返回错误
+新进程 main 最前执行 Run
+ 1. Bootstrap：读 .pending → 校验 .new → rename(目标, .old)
+     → rename(.new, 目标) → 删除 .pending 与 .old
+ 2. 失败保留 .pending（下次启动重试）
+ 3. 继续正常 Check/Apply
 ```
 
 `.pending` 写入必须是原子的（临时文件 + rename），避免半写标记。
 
-## 5. 安全模型
+## 6. 安全模型
 
-### 5.1 传输与完整性
+### 6.1 传输与完整性
 
-- 清单与资产均通过 HTTPS 拉取（HTTP 仅测试可开）；
+- 默认仅 HTTPS；`AllowHTTP` 仅用于测试/内网；
 - SHA256 在下载流中并行计算，校验失败即删除临时文件；
-- `MaxDownloadBytes` 限制（默认 512 MiB），流式截断。
+- `MaxDownloadBytes` 限制（默认 512 MiB），流式截断；
+- 更新通道固定为自建服务端（`internal/source` 只有 HTTP 清单源），
+  不接入 GitHub 等外部渠道。
 
-### 5.2 真实性（可选签名）
+### 6.2 真实性（可选签名）
 
-- Ed25519 公钥经配置注入；
-- 签名对象为清单 JSON **规范化字节**（`Signature` 置空后序列化，
-  字段顺序与 map 排序由 `encoding/json` 保证）；
+- Ed25519 公钥经 `VerifyPublicKey` 注入；
+- 签名对象为清单 JSON 规范化字节（`Signature` 置空后序列化）；
 - 配置公钥但清单无签名 → `ErrSignatureInvalid`；
 - 未配置公钥 → 跳过签名校验（文档明确降级风险）。
 
-### 5.3 TOCTOU 防护
+### 6.3 TOCTOU 防护
 
-`Check` 与 `Apply` 分离时，检查后清单可能被替换：
+`Apply` 会重新拉取清单并比对目标版本，不依赖 `Check` 的缓存结果；
+版本不一致返回错误，要求重新检查。
 
-- `Apply` 会重新拉取清单并比对目标版本；
-- 版本不一致返回 `ErrManifestInvalid`（要求重新 Check）。
+### 6.4 管理路由
 
-### 5.4 临时文件
+- `X-Api-Token` 使用常量时间比较；
+- 未配置 `WithAdminToken` 时管理分组完全不挂载；
+- 自定义管理路由必须通过 `HandleAdmin` 注册，强制走同一鉴权。
 
-- `os.CreateTemp` 生成，0600 权限；
-- 校验通过后才 chmod 0755；
-- 所有失败路径 defer 清理。
-
-## 6. 平台差异明细
+## 7. 平台差异明细
 
 | 能力 | Unix | Windows |
 | --- | --- | --- |
@@ -137,37 +151,13 @@ Bootstrap（新进程，main 最前调用）
 | 备份 | .bak 同目录 | .old 同目录 |
 | 标记文件 | 无 | .pending |
 | 权限 | chmod 0755 | 保持默认 |
-
-## 7. 配置结构
-
-```go
-type Config struct {
-	Source          VersionSource      // 发布源（必填）
-	CurrentVersion  string             // 当前版本（必填，semver）
-	ExecutablePath  string             // 目标二进制路径（默认 os.Executable）
-	VerifyPublicKey []byte             // Ed25519 公钥（可选）
-	MaxDownloadBytes int64             // 默认 512 MiB
-	AllowHTTP       bool               // 仅测试
-	Logger          logx.Logger        // 可选
-	Metrics         Metrics            // 可选
-	HTTPClient      *http.Client       // 可选（默认 30s 超时）
-}
-```
+| 重启命令 | /bin/sh -c | cmd.exe /C |
 
 ## 8. 集成建议
 
-- webx 服务：启动时 `Bootstrap` → 后台 goroutine `Check` →
-  管理员 API 触发 `ApplyAndRestart`；
-- jobx：用 `Every` 定时检查；
-- confx：`Config` 结构体可直接作为 confx 目标；
-- 自更新示例（v0.4.0）：
-  - `examples/updateserver`：webx HTTP/3 服务端（自签证书、
-    `/update.json` + `/download`）；
-  - `examples/updateclient`：httpx HTTP/3 客户端 + updatex，
-    将临时目标二进制从 1.0.0 升级到 1.1.0。
-
-### 8.1 HTTP/3 传输细节
-
-- 客户端 `HTTPSource` 默认使用 httpx（`WithHTTP3` 切换 HTTP/3）；
-- HTTP/3 需要 TLS 与 UDP；示例自签证书由服务端启动时生成；
-- 清单与资产走同一传输通道，体现端到端 HTTP/3 升级。
+- webx 服务：`NewServer` + `RegisterWebx(ws)`，`Start` 前完成注册；
+- 业务 main：最前调用 `NewClient` + `Run`，失败仅记录日志，不阻塞启动；
+- `AfterUpdate` 由业务按部署形态选择：systemd/supervisor 用
+  `Restart`（如 `systemctl restart xxx`），Windows 服务用
+  `Restart`（服务重启指令）或 `Exit`（由服务管理器拉起）；
+- confx：`ClientConfig` 结构体可直接作为 confx 目标。

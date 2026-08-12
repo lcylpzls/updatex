@@ -1,23 +1,19 @@
-// updateclient 示例：基于 httpx HTTP/3 客户端与 updatex 的升级客户端。
-// 演示：拉取清单 → 版本检查 → 下载校验 → 替换目标文件。
+// updateclient 示例：基于 updatex 客户端工厂的一键自动升级。
+// main 最前创建客户端并调用 Run，完成检查 → 下载校验 → 替换 → 更新后动作。
 package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"os"
-	"time"
 
 	"github.com/lcylpzls/clix"
-	"github.com/lcylpzls/httpx"
-	_ "github.com/lcylpzls/httpx/http3" // 注册 HTTP/3 传输
 	"github.com/lcylpzls/logx"
 	"github.com/lcylpzls/updatex"
-	"github.com/lcylpzls/updatex/source"
 )
 
-// Options 升级客户端选项。
+// Options 升级客户端选项（命令与测试共用）。
 type Options struct {
 	ManifestURL     string
 	CurrentVersion  string
@@ -26,11 +22,13 @@ type Options struct {
 	UseHTTP3        bool
 	InsecureTLS     bool
 	VerifyPublicKey []byte
+	AfterUpdate     updatex.AfterUpdateAction
+	RestartCommand  string
 }
 
 func main() {
-	app, err := clix.New("updateclient", "0.7.0",
-		clix.WithDescription("HTTP/3 升级客户端示例"),
+	app, err := clix.New("updateclient", "0.8.0",
+		clix.WithDescription("HTTP/3 一键升级客户端示例"),
 		clix.WithIO(os.Stdout, os.Stderr),
 		clix.WithGlobalFlags(
 			clix.StringFlag("manifest", "发布清单 URL").Required(),
@@ -39,7 +37,9 @@ func main() {
 			clix.BoolFlag("http3", "使用 HTTP/3 传输").Default(true),
 			clix.BoolFlag("allow-http", "允许明文 HTTP（仅测试）").Default(false),
 			clix.BoolFlag("insecure", "跳过 TLS 证书校验（自签证书示例）").Default(true),
-			clix.StringFlag("verify-key", "Ed25519 公钥（十六进制，可选）"),
+			clix.StringFlag("verify-key", "Ed25519 公钥（十六进制，可选）").Default(""),
+			clix.StringFlag("after-update", "更新后动作：continue/exit/restart").Default("continue"),
+			clix.StringFlag("restart-command", "重启动作的命令行（如 systemctl restart xxx）").Default(""),
 		),
 		clix.WithRootAction(runClient),
 	)
@@ -59,6 +59,10 @@ func runClient(ctx context.Context, c *clix.Context) error {
 		}
 		pub = keyBytes
 	}
+	action, err := parseAfterUpdate(c.GlobalString("after-update"))
+	if err != nil {
+		return err
+	}
 	logger, err := logx.NewBuilder().EnableWriter(os.Stdout, logx.InfoLevel).Build()
 	if err != nil {
 		return err
@@ -71,60 +75,54 @@ func runClient(ctx context.Context, c *clix.Context) error {
 		UseHTTP3:        c.GlobalBool("http3"),
 		InsecureTLS:     c.GlobalBool("insecure"),
 		VerifyPublicKey: pub,
+		AfterUpdate:     action,
+		RestartCommand:  c.GlobalString("restart-command"),
 	}
-	return run(ctx, opts, logger)
+	res, err := run(ctx, opts, logger)
+	if err != nil {
+		return err
+	}
+	if res.Updated {
+		logger.Info("updateclient：升级完成", logx.Fields(logx.String("目标版本", res.Version)))
+	} else {
+		logger.Info("updateclient：当前已是最新版本", logx.Fields())
+	}
+	return nil
+}
+
+// parseAfterUpdate 解析更新后动作参数。
+func parseAfterUpdate(s string) (updatex.AfterUpdateAction, error) {
+	switch s {
+	case "continue":
+		return updatex.AfterUpdateContinue, nil
+	case "exit":
+		return updatex.AfterUpdateExit, nil
+	case "restart":
+		return updatex.AfterUpdateRestart, nil
+	default:
+		return 0, errors.New("非法更新后动作：" + s)
+	}
 }
 
 // run 执行完整升级流程（测试与命令共用）。
-func run(ctx context.Context, opts Options, logger logx.Logger) error {
-	clientOpts := []httpx.Option{httpx.WithTimeout(30 * time.Second)}
-	if opts.UseHTTP3 {
-		clientOpts = append(clientOpts, httpx.WithProtocol(httpx.ProtocolHTTP3))
-	}
-	if opts.InsecureTLS {
-		clientOpts = append(clientOpts, httpx.WithTLSClientConfig(&tls.Config{InsecureSkipVerify: true}))
-	}
-	client, err := httpx.New(clientOpts...)
-	if err != nil {
-		return err
-	}
-	src, err := source.NewHTTPSource(opts.ManifestURL, opts.AllowHTTP, source.WithHTTPClient(client))
-	if err != nil {
-		return err
-	}
-	u, err := updatex.New(updatex.Config{
-		Source:          src,
+func run(ctx context.Context, opts Options, logger logx.Logger) (*updatex.Result, error) {
+	cfg := updatex.ClientConfig{
+		ManifestURL:     opts.ManifestURL,
 		CurrentVersion:  opts.CurrentVersion,
 		ExecutablePath:  opts.Target,
 		AllowHTTP:       opts.AllowHTTP,
-		HTTPClient:      client,
-		VerifyPublicKey: opts.VerifyPublicKey,
 		Logger:          logger,
-	})
+		AfterUpdate:     opts.AfterUpdate,
+		RestartCommand:  opts.RestartCommand,
+		VerifyPublicKey: opts.VerifyPublicKey,
+		InsecureTLS:     opts.InsecureTLS,
+	}
+	if opts.UseHTTP3 {
+		cfg.Protocol = updatex.ProtocolHTTP3
+	}
+	c, err := updatex.NewClient(cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	info, err := u.Check(ctx)
-	if err != nil {
-		return err
-	}
-	logger.Info("updateclient：版本检查完成",
-		logx.Fields(logx.Bool("有更新", info.HasUpdate), logx.String("目标版本", info.Version)))
-	if !info.HasUpdate {
-		logger.Info("updateclient：当前已是最新版本", logx.Fields())
-		return nil
-	}
-	applied, err := u.Apply(ctx)
-	if err != nil {
-		return err
-	}
-	if applied.RestartRequired {
-		// Windows 延迟替换：模拟新进程启动时完成替换。
-		if err := updatex.Bootstrap(ctx, opts.Target); err != nil {
-			return err
-		}
-	}
-	logger.Info("updateclient：升级完成",
-		logx.Fields(logx.String("目标版本", applied.Version)))
-	return nil
+	return c.Run(ctx)
 }

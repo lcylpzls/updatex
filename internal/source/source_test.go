@@ -3,14 +3,14 @@ package source
 import (
 	"context"
 	"errors"
-	testx "github.com/lcylpzls/testx"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/lcylpzls/httpx"
-	"github.com/lcylpzls/updatex"
+	"github.com/lcylpzls/testx"
+	"github.com/lcylpzls/updatex/internal/core"
 )
 
 var goodManifest = `{"version":"1.1.0","platforms":{"linux_amd64":` +
@@ -37,16 +37,16 @@ func (failReader) Read([]byte) (int, error) { return 0, errors.New("读取故障
 
 // TestNewHTTPSource 覆盖构造校验。
 func TestNewHTTPSource(t *testing.T) {
-	if _, err := NewHTTPSource("", true); !errors.Is(err, updatex.ErrInvalidConfig) {
+	if _, err := NewHTTPSource("", true); !errors.Is(err, core.ErrInvalidConfig) {
 		t.Fatalf("空 URL 应报错，实际：%v", err)
 	}
-	if _, err := NewHTTPSource("http://x/update.json", false); !errors.Is(err, updatex.ErrInvalidConfig) {
+	if _, err := NewHTTPSource("http://x/update.json", false); !errors.Is(err, core.ErrInvalidConfig) {
 		t.Fatalf("明文 HTTP 应报错，实际：%v", err)
 	}
 	if _, err := NewHTTPSource("https://x/update.json", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewHTTPSource("http://x/update.json", true, WithHTTPClient(nil)); !errors.Is(err, updatex.ErrInvalidConfig) {
+	if _, err := NewHTTPSource("http://x/update.json", true, WithHTTPClient(nil)); !errors.Is(err, core.ErrInvalidConfig) {
 		t.Fatalf("空客户端应报错，实际：%v", err)
 	}
 	s, err := NewHTTPSource("http://x/update.json", true, WithHTTP3(true))
@@ -108,11 +108,11 @@ func TestLatest(t *testing.T) {
 		t.Fatal("坏 JSON 应报错")
 	}
 	sHuge, _ := NewHTTPSource(srv.URL+"/huge", true)
-	if _, err := sHuge.Latest(ctx); !errors.Is(err, updatex.ErrFetchFailed) {
+	if _, err := sHuge.Latest(ctx); !errors.Is(err, core.ErrFetchFailed) {
 		t.Fatalf("超限应报拉取失败，实际：%v", err)
 	}
 	sTrunc, _ := NewHTTPSource(srv.URL+"/truncated", true)
-	if _, err := sTrunc.Latest(ctx); !errors.Is(err, updatex.ErrFetchFailed) {
+	if _, err := sTrunc.Latest(ctx); !errors.Is(err, core.ErrFetchFailed) {
 		t.Fatalf("读取错误应报拉取失败，实际：%v", err)
 	}
 	// 请求错误。
@@ -123,14 +123,14 @@ func TestLatest(t *testing.T) {
 		t.Fatalf("请求错误应透传，实际：%v", err)
 	}
 	// 响应体读取错误。
-	if _, err := readLimited(failReader{}, 10); !errors.Is(err, updatex.ErrFetchFailed) {
+	if _, err := readLimited(failReader{}, 10); !errors.Is(err, core.ErrFetchFailed) {
 		t.Fatalf("读取错误应报拉取失败，实际：%v", err)
 	}
 }
 
 // TestReadLimited 覆盖响应体大小上限分支。
 func TestReadLimited(t *testing.T) {
-	if _, err := readLimited(strings.NewReader(strings.Repeat("x", 11)), 10); !errors.Is(err, updatex.ErrFetchFailed) {
+	if _, err := readLimited(strings.NewReader(strings.Repeat("x", 11)), 10); !errors.Is(err, core.ErrFetchFailed) {
 		t.Fatalf("超限应报拉取失败，实际：%v", err)
 	}
 	data, err := readLimited(strings.NewReader("abc"), 10)

@@ -1,18 +1,17 @@
-// Package source 提供发布源实现（HTTP 清单源、GitHub Releases 源）。
+// Package source 提供发布源实现（HTTP 清单源，唯一通道为自建更新服务端）。
 package source
 
 import (
 	"context"
 
-	"github.com/lcylpzls/updatex"
+	"github.com/lcylpzls/updatex/internal/core"
 )
 
 // HTTPSource HTTP 清单源：从固定 URL 拉取发布清单。
 type HTTPSource struct {
-	url       string
-	client    httpClient
-	allowHTTP bool
-	protocol  protocol
+	url      string
+	client   httpClient
+	protocol protocol
 }
 
 // HTTPSourceOption HTTP 源配置项。
@@ -42,7 +41,7 @@ func WithHTTP2(enable bool) HTTPSourceOption {
 func WithHTTPClient(client httpClient) HTTPSourceOption {
 	return func(s *HTTPSource) error {
 		if client == nil {
-			return updatex.ErrInvalidConfig
+			return core.ErrInvalidConfig
 		}
 		s.client = client
 		return nil
@@ -50,7 +49,7 @@ func WithHTTPClient(client httpClient) HTTPSourceOption {
 }
 
 // Latest 拉取并解析最新发布清单。
-func (s *HTTPSource) Latest(ctx context.Context) (*updatex.Manifest, error) {
+func (s *HTTPSource) Latest(ctx context.Context) (*core.Manifest, error) {
 	resp, err := s.client.Get(ctx, s.url)
 	if err != nil {
 		return nil, err
@@ -60,5 +59,5 @@ func (s *HTTPSource) Latest(ctx context.Context) (*updatex.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	return updatex.ParseManifest(data)
+	return core.ParseManifest(data)
 }

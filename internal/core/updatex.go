@@ -94,6 +94,11 @@ type Updater struct {
 	httpClient     *httpx.Client
 }
 
+// ExecutablePath 返回目标可执行文件路径（客户端 Bootstrap 使用）。
+func (u *Updater) ExecutablePath() string {
+	return u.executablePath
+}
+
 // New 构造升级器。
 func New(cfg Config) (*Updater, error) {
 	if cfg.Source == nil {

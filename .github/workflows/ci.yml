@@ -115,10 +115,10 @@ jobs:
 
       - name: Fuzz short run (10s per target)
         run: |
-          go test -run '^$' -fuzz '^FuzzParseVersion$' -fuzztime=10s .
-          go test -run '^$' -fuzz '^FuzzManifest$' -fuzztime=10s .
-          go test -run '^$' -fuzz '^FuzzVerifySHA256$' -fuzztime=10s .
-          go test -run '^$' -fuzz '^FuzzVerifySignature$' -fuzztime=10s .
+          go test -run '^$' -fuzz '^FuzzParseVersion$' -fuzztime=10s ./internal/core
+          go test -run '^$' -fuzz '^FuzzManifest$' -fuzztime=10s ./internal/core
+          go test -run '^$' -fuzz '^FuzzVerifySHA256$' -fuzztime=10s ./internal/core
+          go test -run '^$' -fuzz '^FuzzVerifySignature$' -fuzztime=10s ./internal/core
 
   vulncheck:
     runs-on: ubuntu-latest

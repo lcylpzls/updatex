@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	testx "github.com/lcylpzls/testx"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 	"time"
 
 	"github.com/lcylpzls/logx"
+	"github.com/lcylpzls/testx"
+	"github.com/lcylpzls/updatex"
 	"github.com/lcylpzls/updatex/examples/internal/testutil"
 	"github.com/lcylpzls/updatex/examples/internal/updateserver"
 )
@@ -43,14 +44,24 @@ func TestRunHTTP3Upgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := Options{
-		ManifestURL:    "https://" + addr + "/update.json",
+		ManifestURL:    "https://" + addr + "/updates/manifest.json",
 		CurrentVersion: "1.0.0",
 		Target:         target,
 		UseHTTP3:       true,
 		InsecureTLS:    true,
+		AfterUpdate:    updatex.AfterUpdateContinue,
 	}
-	if err := run(ctx, opts, testLogger()); err != nil {
-		t.Fatalf("升级失败：%v", err)
+	res, err := run(ctx, opts, testLogger())
+	if err != nil || !res.Updated || res.Version != "1.1.0" {
+		t.Fatalf("升级失败：res=%+v err=%v", res, err)
+	}
+	if res.RestartRequired {
+		// Windows 延迟替换：模拟新进程再次执行 Run，由内部 Bootstrap 完成替换。
+		res2, err := run(ctx, opts, testLogger())
+		if err != nil {
+			t.Fatalf("模拟重启失败：%v", err)
+		}
+		_ = res2
 	}
 	data, err := os.ReadFile(target)
 	if err != nil || string(data) != string(asset) {
@@ -69,8 +80,9 @@ func TestRunHTTP3Upgrade(t *testing.T) {
 
 	// 已是最新版本：不替换。
 	opts.CurrentVersion = "1.1.0"
-	if err := run(ctx, opts, testLogger()); err != nil {
-		t.Fatalf("检查最新版本失败：%v", err)
+	res2, err := run(ctx, opts, testLogger())
+	if err != nil || res2.Updated {
+		t.Fatalf("检查最新版本失败：res=%+v err=%v", res2, err)
 	}
 	data, err = os.ReadFile(target)
 	if err != nil || string(data) != string(asset) {

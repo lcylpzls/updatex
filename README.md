@@ -1,88 +1,98 @@
 # updatex
 
-自研程序自动升级库：集成后程序具备版本检查、下载校验、原子替换
-与重启能力，与 errx / logx / confx / httpx 生态打通。
+自研程序自动更新基座：服务端基于 webx 提供清单与资产，客户端一键完成
+版本检查、下载校验、原子替换与更新后动作，与 errx / logx / httpx / webx
+生态打通。
 
-> 当前状态：**v1.2.0**。
+> 当前状态：**v1.4.0**。
 
 ## 定位
 
 updatex **不是分发平台**，不解决「怎么构建产物、怎么托管」；它解决
 程序侧每个自更新需求都要重复的部分：
 
-- 版本检查：拉取发布清单、语义化版本比较、降级防护；
-- 发布源：HTTP 清单源、GitHub Releases 源（接口抽象）；
-- 下载校验：SHA256 校验和（必需）+ Ed25519 签名（可选）；
-- 原子替换：Unix 原子 rename，Windows 启动时替换（延迟替换）；
-- 回滚：替换前备份，失败可恢复；
-- 服务端：清单 / 资产 / 管理路由封装（`NewServer`，标准 net/http）；
-- 可观测：logx 结构化日志、外部注入 Metrics；
+- 服务端：基于 webx 注册清单路由、资产静态服务与管理路由（`NewServer` +
+  `RegisterWebx`）；
+- 客户端：main 最前一行 `NewClient` + `Run`，内部完成检查、下载、
+  校验、替换与更新后动作（继续 / 退出 / 重启）；
+- 完整性：SHA256 校验和（必需）+ Ed25519 清单签名（可选）；
+- 替换：Unix 原子替换，Windows 启动时替换（延迟替换）；
+- 安全：默认仅 HTTPS，单一自建更新通道（不支持 GitHub 等外部渠道）；
+- 可观测：logx 结构化日志、外部注入 Metrics 与 TraceHook；
 - 错误语义：统一 errx 错误码。
 
 ## 快速上手
 
+### 服务端（挂载到 webx）
+
 ```go
-import (
-	"context"
-	"log"
+// 资产目录需包含 manifest.json 与各平台二进制。
+s, err := updatex.NewServer("./assets", updatex.WithAdminToken("令牌"))
+if err != nil {
+	log.Fatal(err)
+}
 
-	"github.com/lcylpzls/updatex"
-	"github.com/lcylpzls/updatex/source"
-)
+ws := webx.NewServer(webx.Config{
+	TLSCertFile: "cert.pem",
+	TLSKeyFile:  "key.pem",
+}, logger)
+ws.UseHttp2Listen(":8443")
+ws.UseHttp3Listen(":8443")
+if err := s.RegisterWebx(ws); err != nil { // 必须在 Start 前调用
+	log.Fatal(err)
+}
+log.Fatal(ws.Start())
+```
 
-func main() {
-	src, err := source.NewHTTPSource("https://cdn.example.com/update.json", false)
-	if err != nil {
-		log.Fatal(err)
-	}
-u, err := updatex.New(updatex.Config{
-		Source:         src,
-		CurrentVersion: "1.0.0",
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+默认路由：
 
-	ctx := context.Background()
-	info, err := u.Check(ctx) // 预览：是否有更新
-	if err != nil {
-		log.Fatal(err)
-	}
-	if info.HasUpdate {
-		_, err = u.ApplyAndRestart(ctx, func() error {
-			return nil // 业务重启逻辑
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+- `GET /updates/manifest.json`：发布清单；
+- `/updates/assets/`：升级资产静态服务；
+- `/updates/admin/status`：管理状态（配置 `WithAdminToken` 后启用，
+  需携带 `X-Api-Token`）。
+
+### 客户端（main 最前）
+
+```go
+c, err := updatex.NewClient(updatex.ClientConfig{
+	ManifestURL:    "https://updates.example.com/updates/manifest.json",
+	CurrentVersion: "1.0.0",
+	AfterUpdate:    updatex.AfterUpdateExit, // 或 Continue / Restart
+	RestartCommand: "systemctl restart myapp", // AfterUpdate=Restart 时必填
+	Logger:         logger,
+})
+if err != nil {
+	log.Fatal(err)
+}
+if _, err := c.Run(context.Background()); err != nil {
+	log.Printf("自更新失败：%v", err) // 失败不阻塞业务启动
 }
 ```
 
-## 已发布版本
-
-- v0.1.0：核心闭环（检查 / 下载校验 / Unix 原子替换 / HTTP 清单源）。
-- v0.2.0：Windows 启动时替换（.new/.pending/Bootstrap）与
-  Unix 备份回滚。
-- v0.3.0：GitHub Releases 源与 Ed25519 清单签名校验。
-- v0.4.0：webx 服务端 + httpx 客户端 HTTP/3 端到端升级示例。
-
-文档索引见 [docs/README.md](docs/README.md)，更新记录见
-[CHANGELOG.md](CHANGELOG.md)。
+`Run` 内部流程：Windows 启动时替换（Bootstrap）→ 拉取清单 → 版本检查 →
+有更新则下载校验替换 → 按 `AfterUpdate` 执行动作。
 
 ## 目录
 
 ```
 updatex/
+├── updatex.go          # 公开门面：NewServer / NewClient + 类型与错误码
+├── internal/
+│   ├── core/           # 共享引擎（清单/版本/校验/替换/Updater）
+│   ├── server/         # 服务端实现（webx 适配）
+│   ├── client/         # 客户端实现（httpx 集成 + 一键闭环）
+│   └── source/         # HTTP 清单源（唯一通道）
 ├── docs/
-│   ├── README.md          # 文档索引
-│   ├── architecture.md    # 架构详解（组件/状态机/平台时序/安全模型）
-│   ├── api.md             # API 定版（完整签名与语义）
-├── examples/
-│   ├── updateserver/      # webx HTTP/3 升级服务端
-│   └── updateclient/      # httpx HTTP/3 升级客户端
-└── README.md
+│   ├── README.md       # 文档索引
+│   ├── architecture.md # 架构详解
+│   └── api.md          # API 定版
+└── examples/
+    ├── updateserver/   # webx HTTP/3 升级服务端示例
+    └── updateclient/   # 一键升级客户端示例
 ```
+
+文档索引见 [docs/README.md](docs/README.md)，更新记录见
+[CHANGELOG.md](CHANGELOG.md)。
 
 ## License
 

@@ -54,6 +54,13 @@ func TestNewVVersion(t *testing.T) {
 	}
 }
 
+// TestUpdaterExecutablePath 覆盖目标可执行文件路径访问器。
+func TestUpdaterExecutablePath(t *testing.T) {
+	u, err := New(Config{Source: &stubSource{}, CurrentVersion: "1.0.0", ExecutablePath: "app.bin"})
+	testx.RequireNoError(t, err)
+	testx.RequireEqual(t, u.ExecutablePath(), "app.bin")
+}
+
 // TestApplySourceFailure 覆盖 Apply 的源失败分支。
 func TestApplySourceFailure(t *testing.T) {
 	u, err := New(Config{Source: &stubSource{err: ErrFetchFailed},
