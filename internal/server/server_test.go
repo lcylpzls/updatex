@@ -74,7 +74,7 @@ func startTestWebx(t *testing.T, s *Server) *testServer {
 		TLSKeyFile:      keyFile,
 		ShutdownTimeout: 3 * time.Second,
 	}, testLogger())
-	ws.UseHttp2Listen("127.0.0.1:0")
+	ws.UseHttp1or2Listen("127.0.0.1:0", true)
 	testx.RequireNoError(t, s.RegisterWebx(ws))
 	done := make(chan error, 1)
 	go func() { done <- ws.Start() }()

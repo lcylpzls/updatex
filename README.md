@@ -36,7 +36,7 @@ ws := webx.NewServer(webx.Config{
 	TLSCertFile: "cert.pem",
 	TLSKeyFile:  "key.pem",
 }, logger)
-ws.UseHttp2Listen(":8443")
+ws.UseHttp1or2Listen(":8443", true)
 ws.UseHttp3Listen(":8443")
 if err := s.RegisterWebx(ws); err != nil { // 必须在 Start 前调用
 	log.Fatal(err)

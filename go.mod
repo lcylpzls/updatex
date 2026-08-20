@@ -10,7 +10,7 @@ require (
 	github.com/lcylpzls/testx v1.5.0
 	github.com/lcylpzls/tracex/contract v1.0.0
 	github.com/lcylpzls/validx v1.3.0
-	github.com/lcylpzls/webx v1.6.4
+	github.com/lcylpzls/webx v1.7.0
 )
 
 require (
